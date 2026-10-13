@@ -1,14 +1,17 @@
-# AgentGuard clean-room — Phase 1 stabilization
+# AgentGuard — phase 1 stabilization status
 
-Status: IN PROGRESS; not publish-ready.
+## Completed in this pass
+- Consolidated working copy from existing clean-room RC1 (no legacy repository copied).
+- Fixed local rate-limit preflight so it does not consume one-time approvals when the local quota is already exhausted.
+- Added regression test for the above case.
+- Re-ran local suite: 46 passed, 1 skipped (PostgreSQL live integration).
+- No GitHub repo, production branch, or public website changed.
 
-Local worktree artifact: `AgentGuard-Stabilization-Phase1.zip` supplied in the conversation. The full worktree is **not yet synced to this GitHub branch**. Do not run integration tests against this branch until source upload is complete.
+## Release blockers
+1. Live PostgreSQL integration not executed: no disposable PostgreSQL server or `AG_TEST_POSTGRES_DSN` available in this environment.
+2. Distributed coordination and central audit still have separate transactions. External tool side effects cannot be rolled back after post-execution audit failure.
+3. Real concurrency, restart, network partition and recovery tests remain.
+4. Production identity, tenant isolation, deployment, observability and security review remain unverified.
 
-Verified in the local worktree: 46 tests passed, 1 PostgreSQL live integration test skipped. Local rate-limit preflight was updated to avoid consuming a one-time approval when the quota is exhausted.
-
-Blockers:
-- Real disposable PostgreSQL instance and integration test run.
-- Distributed concurrency, transaction failure and recovery tests.
-- Post-execution audit failure handling and release security review.
-
-No changes authorized to existing repositories, main branch or wedocare-global.com.
+## Next phase gate
+Complete phase 1 only when a disposable PostgreSQL environment is available and the distributed admission/audit/failure test suite passes without skips. Then proceed to phase 2 (product completion), followed by phase 3 (release validation), sequentially.

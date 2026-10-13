@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "wdc-agentguard-cleanroom"
+version = "1.0.0rc1"
+requires-python = ">=3.11"
+dependencies = ["fastapi>=0.110,<1", "uvicorn>=0.27,<1", "cryptography>=42,<47", "httpx>=0.27,<1"]
+[project.optional-dependencies]
+postgres = ["psycopg[binary]>=3.2,<4"]
+test = ["pytest>=8", "httpx>=0.27"]
+[tool.setuptools.packages.find]
+include = ["agentguard*"]
