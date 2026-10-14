@@ -82,11 +82,13 @@ class Guard:
     def verify_audit(self) -> bool:
         with self.lock:
             previous = "GENESIS"
-            for body, prev, signature in self.db.execute("SELECT body, previous, signature FROM events ORDER BY seq"):
+            expected_seq = 1
+            for seq, body, prev, signature in self.db.execute("SELECT seq, body, previous, signature FROM events ORDER BY seq"):
                 expected = hmac.new(self.key, (previous + body).encode(), hashlib.sha256).hexdigest()
-                if prev != previous or not hmac.compare_digest(signature, expected):
+                if seq != expected_seq or prev != previous or not hmac.compare_digest(signature, expected):
                     return False
                 previous = signature
+                expected_seq += 1
             return True
 
     def set_kill_switch(self, enabled: bool) -> None:
