@@ -101,6 +101,9 @@ class Guard:
     def grant(self, agent: str, tool: str, payload: Any, ttl: int = 120) -> str:
         if not agent or ttl < 1 or ttl > 3600 or self.policy.decide(tool) != "APPROVAL_REQUIRED" or tool not in self.tools:
             raise ValueError("Invalid approval request")
+        with self.lock:
+            if not self.verify_audit():
+                raise RuntimeError("audit_integrity_failure")
         if self.shared_control is not None:
             return self.shared_control.grant(agent, fingerprint(agent, tool, payload), ttl)
         token = secrets.token_urlsafe(32)
@@ -117,6 +120,10 @@ class Guard:
         except (TypeError, ValueError):
             return {"decision": "DENY", "reason": "invalid_payload"}
         with self.lock:
+            # Corrupt local evidence must block admission before tokens, reservations,
+            # or tools are consumed. Do not append to a chain known to be corrupt.
+            if not self.verify_audit():
+                return {"decision": "DENY", "reason": "audit_integrity_failure"}
             if self.db.execute("SELECT 1 FROM requests WHERE request_id=?", (request_id,)).fetchone():
                 self._audit({"event": "replay_blocked", "request_id": request_id})
                 return {"decision": "DENY", "reason": "replay"}
@@ -213,3 +220,4 @@ class Guard:
                         pass
                 self._audit({"event": "execution_failed", "request_id": request_id})
                 return {"decision": "ERROR", "reason": "tool_execution_failed"}
+
