@@ -1,9 +1,12 @@
 """Read-only administrative HTML console; no external assets or browser secrets."""
 from __future__ import annotations
+
+import hmac
 from html import escape
+
 from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
-import hmac
+
 from .core import Guard
 
 

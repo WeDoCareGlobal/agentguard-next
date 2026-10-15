@@ -3,8 +3,10 @@
 Only returns a named secret to trusted in-process code. Never log the token.
 """
 from __future__ import annotations
+
 from dataclasses import dataclass
 from urllib.parse import quote
+
 import httpx
 
 

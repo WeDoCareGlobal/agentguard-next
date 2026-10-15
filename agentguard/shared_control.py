@@ -4,6 +4,7 @@ Requires a connection factory yielding an independent psycopg connection per cal
 Do not use a shared connection concurrently across workers.
 """
 from __future__ import annotations
+
 import hashlib
 import secrets
 import time
@@ -21,10 +22,9 @@ class SharedControl:
         self.connection_factory = connection_factory
 
     def initialize(self):
-        with self.connection_factory() as conn:
-            with conn.transaction():
-                for statement in DDL.split(';'):
-                    if statement.strip(): conn.execute(statement)
+        with self.connection_factory() as conn, conn.transaction():
+            for statement in DDL.split(';'):
+                if statement.strip(): conn.execute(statement)
 
     def set_halt(self, enabled: bool):
         with self.connection_factory() as conn:
@@ -49,10 +49,9 @@ class SharedControl:
     def consume(self, agent: str, payload_hash: str, token: str | None) -> bool:
         if not token or not agent or not payload_hash: return False
         digest = hashlib.sha256(token.encode()).hexdigest()
-        with self.connection_factory() as conn:
-            with conn.transaction():
-                row = conn.execute('''UPDATE ag_approvals SET consumed=TRUE
+        with self.connection_factory() as conn, conn.transaction():
+            row = conn.execute('''UPDATE ag_approvals SET consumed=TRUE
                     WHERE token_hash=%s AND agent=%s AND payload_hash=%s
                     AND expires>%s AND consumed=FALSE RETURNING token_hash''',
-                    (digest,agent,payload_hash,time.time())).fetchone()
-                return row is not None
+                (digest,agent,payload_hash,time.time())).fetchone()
+            return row is not None

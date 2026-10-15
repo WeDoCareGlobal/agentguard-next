@@ -3,14 +3,16 @@
 JWKS retrieval, rotation and revocation are deployment responsibilities. Fail closed.
 """
 from __future__ import annotations
+
 import base64
 import json
 import time
 from dataclasses import dataclass
 from typing import Any
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
-from cryptography.hazmat.primitives import hashes
+
 from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 
 def _decode(value: str) -> bytes:

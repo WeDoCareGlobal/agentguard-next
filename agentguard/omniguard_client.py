@@ -1,10 +1,12 @@
 """OmniGuard client for FoundationCentar-Next integration."""
 from __future__ import annotations
-import httpx
+
 import os
-from typing import Any, Optional
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
+
+import httpx
 
 
 class OmniGuardDecision(str, Enum):
@@ -19,7 +21,7 @@ class OmniGuardResult:
     signature: str
     latency_ms: float
     tier_latencies: dict[str, float]
-    blocked_reason: Optional[str] = None
+    blocked_reason: str | None = None
 
 
 class OmniGuardClient:
@@ -28,13 +30,13 @@ class OmniGuardClient:
     def __init__(
         self,
         base_url: str = "http://localhost:8000/v1",
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         timeout: float = 30.0,
     ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key or os.environ.get("OMNIGUARD_API_KEY", "sk-admin-123")
         self.timeout = timeout
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
@@ -54,7 +56,7 @@ class OmniGuardClient:
         self,
         messages: list[dict[str, Any]],
         model: str = "omniguard-2.0",
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> OmniGuardResult:
         """Send messages to OmniGuard for inspection."""
         client = await self._get_client()
@@ -103,7 +105,7 @@ class OmniGuardClient:
 
 
 # Singleton instance
-_omniguard_client: Optional[OmniGuardClient] = None
+_omniguard_client: OmniGuardClient | None = None
 
 
 def get_omniguard_client() -> OmniGuardClient:

@@ -1,15 +1,17 @@
 """Minimal authenticated HTTP boundary with OmniGuard integration; use TLS termination in deployment."""
 from __future__ import annotations
+
 import hmac
+from typing import Any
+
 from fastapi import FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, Field
-from typing import Any, Optional
 
 from .core import Guard
 
 # OmniGuard integration
 try:
-    from .omniguard_client import get_omniguard_client, OmniGuardDecision
+    from .omniguard_client import OmniGuardDecision, get_omniguard_client
     OMNIGUARD_AVAILABLE = True
 except ImportError:
     OMNIGUARD_AVAILABLE = False
@@ -31,7 +33,7 @@ class Approval(BaseModel):
 class Halt(BaseModel):
     enabled: bool
 
-async def _omniguard_inspect(agent: str, tool: str, payload: Any) -> Optional[str]:
+async def _omniguard_inspect(agent: str, tool: str, payload: Any) -> str | None:
     """Inspect tool call via OmniGuard. Returns block reason if blocked, None if allowed."""
     if not OMNIGUARD_AVAILABLE:
         return None
@@ -93,9 +95,8 @@ def attach_optional_console(app: FastAPI, guard: Guard, admin_key: str) -> None:
     app.include_router(console_router(guard, admin_key))
 
 
-def attach_scoped_execution(app: FastAPI, guard: Guard, authority: 'TokenAuthority') -> None:
+def attach_scoped_execution(app: FastAPI, guard: Guard, authority: TokenAuthority) -> None:
     """Add a bearer-authenticated endpoint without changing legacy key endpoints."""
-    from .identity import TokenAuthority
 
     @app.post('/v1/scoped/execute')
     def scoped_execute(call: Call, request: Request):
@@ -108,12 +109,11 @@ def attach_scoped_execution(app: FastAPI, guard: Guard, authority: 'TokenAuthori
         return guard.execute(call.agent, call.tool, call.payload, call.request_id, call.approval)
 
 
-def attach_oidc_execution(app: FastAPI, guard: Guard, verifier: 'OIDCVerifier') -> None:
+def attach_oidc_execution(app: FastAPI, guard: Guard, verifier: OIDCVerifier) -> None:
     """Opt-in OIDC-protected execution route; requires verified execute scope.
 
     Subject is bound to agent identity; clients cannot impersonate another agent.
     """
-    from .oidc import OIDCVerifier
 
     @app.post('/v1/oidc/execute')
     def oidc_execute(call: Call, request: Request):

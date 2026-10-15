@@ -4,6 +4,7 @@ Requires psycopg 3; the caller must provide a trusted, configured connection.
 This does NOT replace Guard's SQLite audit/approval implementation.
 """
 from __future__ import annotations
+
 import hashlib
 import time
 

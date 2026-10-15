@@ -3,6 +3,7 @@
 Single-process reference implementation. Not suitable for distributed production.
 """
 from __future__ import annotations
+
 import hashlib
 import hmac
 import json
@@ -10,8 +11,9 @@ import secrets
 import sqlite3
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 
 def canonical(value: Any) -> str:

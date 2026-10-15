@@ -1,8 +1,10 @@
 """Secret-provider boundary. This is an adapter, not a live AgentVault integration."""
 from __future__ import annotations
+
 import os
 from dataclasses import dataclass
 from typing import Protocol
+
 
 class SecretProvider(Protocol):
     def get(self, name: str) -> str: ...

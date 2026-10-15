@@ -4,6 +4,7 @@ Admission is durable; tool execution is outside the DB transaction. A reservatio
 is never rolled back after a tool failure, to avoid unsafe duplicate execution.
 """
 from __future__ import annotations
+
 import hashlib
 import time
 
@@ -25,10 +26,9 @@ class PostgresCoordinator:
         self.connection_factory = connection_factory
 
     def initialize(self):
-        with self.connection_factory() as conn:
-            with conn.transaction():
-                for stmt in DDL.split(';'):
-                    if stmt.strip(): conn.execute(stmt)
+        with self.connection_factory() as conn, conn.transaction():
+            for stmt in DDL.split(';'):
+                if stmt.strip(): conn.execute(stmt)
 
     def admit(self, *, request_id: str, agent: str, fingerprint: str,
               limit: int, approval_required: bool, approval_token: str | None) -> tuple[bool, str]:

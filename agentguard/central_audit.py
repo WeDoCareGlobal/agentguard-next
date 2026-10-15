@@ -4,6 +4,7 @@ Requires PostgreSQL, a secret HMAC key, and DB permissions that prohibit UPDATE/
 for the application role. External checkpoint anchoring is needed to detect tail truncation.
 """
 from __future__ import annotations
+
 import hashlib
 import hmac
 import json
@@ -45,9 +46,8 @@ class PostgresAudit:
         self.key = key
 
     def initialize(self):
-        with self.connection_factory() as conn:
-            with conn.transaction():
-                conn.execute(DDL)
+        with self.connection_factory() as conn, conn.transaction():
+            conn.execute(DDL)
 
     def append(self, stream: str, event: dict) -> AuditReceipt:
         if not stream or len(stream) > 200:
