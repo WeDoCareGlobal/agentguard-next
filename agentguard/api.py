@@ -1,10 +1,19 @@
-"""Minimal authenticated HTTP boundary; use TLS termination in deployment."""
+"""Minimal authenticated HTTP boundary with OmniGuard integration; use TLS termination in deployment."""
 from __future__ import annotations
 import hmac
 from fastapi import FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, Field
-from typing import Any
+from typing import Any, Optional
+
 from .core import Guard
+
+# OmniGuard integration
+try:
+    from .omniguard_client import get_omniguard_client, OmniGuardDecision
+    OMNIGUARD_AVAILABLE = True
+except ImportError:
+    OMNIGUARD_AVAILABLE = False
+    OmniGuardDecision = None
 
 class Call(BaseModel):
     agent: str = Field(min_length=1, max_length=128)
@@ -22,7 +31,25 @@ class Approval(BaseModel):
 class Halt(BaseModel):
     enabled: bool
 
-def create_app(guard: Guard, api_key: str, admin_key: str) -> FastAPI:
+async def _omniguard_inspect(agent: str, tool: str, payload: Any) -> Optional[str]:
+    """Inspect tool call via OmniGuard. Returns block reason if blocked, None if allowed."""
+    if not OMNIGUARD_AVAILABLE:
+        return None
+    try:
+        omniguard = get_omniguard_client()
+        messages = [
+            {"role": "system", "content": "AgentGuard tool call inspection"},
+            {"role": "user", "content": f"Agent: {agent}, Tool: {tool}, Payload: {payload}"},
+        ]
+        result = await omniguard.inspect(messages)
+        if result.decision == OmniGuardDecision.BLOCK:
+            return result.blocked_reason or "OmniGuard policy violation"
+    except Exception:
+        # Fail-open for OmniGuard errors (don't block legitimate calls if OmniGuard is down)
+        pass
+    return None
+
+def create_app(guard: Guard, api_key: str, admin_key: str, enable_omniguard: bool = True) -> FastAPI:
     if len(api_key) < 32 or len(admin_key) < 32 or hmac.compare_digest(api_key, admin_key):
         raise ValueError("Distinct, strong API and admin keys required")
     app = FastAPI(title="AgentGuard Clean-Room", version="0.1.0")
@@ -31,10 +58,15 @@ def create_app(guard: Guard, api_key: str, admin_key: str) -> FastAPI:
             raise HTTPException(status_code=401, detail="Unauthorized")
     @app.get("/health")
     def health():
-        return {"status": "ok"}
+        return {"status": "ok", "omniguard_enabled": enable_omniguard and OMNIGUARD_AVAILABLE}
     @app.post("/v1/execute")
-    def execute(call: Call, x_api_key: str | None = Header(default=None)):
+    async def execute(call: Call, x_api_key: str | None = Header(default=None)):
         authorize(x_api_key, api_key)
+        # OmniGuard inspection
+        if enable_omniguard and OMNIGUARD_AVAILABLE:
+            block_reason = await _omniguard_inspect(call.agent, call.tool, call.payload)
+            if block_reason:
+                raise HTTPException(status_code=403, detail=f"OmniGuard blocked: {block_reason}")
         return guard.execute(call.agent, call.tool, call.payload, call.request_id, call.approval)
     @app.post("/v1/admin/approvals")
     def grant(req: Approval, x_admin_key: str | None = Header(default=None)):
