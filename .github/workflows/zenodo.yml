@@ -1,0 +1,147 @@
+name: Zenodo publishing
+
+# Archives every published GitHub release to Zenodo. Zenodo mints a DataCite DOI
+# per version, and because the author ORCID sits in `creators` in .zenodo.json,
+# DataCite pushes the new work to the ORCID record automatically (once ORCID
+# auto-update is authorised for DataCite in the ORCID account).
+#
+# Requires a repository secret: ZENODO_TOKEN (Zenodo personal access token with
+# deposit:write and deposit:actions scopes). Never commit the token or the OAuth
+# client secret — they live only in GitHub Actions secrets.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to deposit (e.g. v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  zenodo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Verify required secret is present
+        env:
+          ZENODO_TOKEN: ${{ secrets.ZENODO_TOKEN }}
+        run: |
+          if [ -z "$ZENODO_TOKEN" ]; then
+            echo "::error::ZENODO_TOKEN is not set. Add it under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Build the release archive
+        id: archive
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          name="agentguard-${TAG}.zip"
+          # Ship the repo contents at the tag, minus VCS/CI noise.
+          zip -r "$name" . \
+            -x '.git/*' -x 'node_modules/*' -x '.github/*' \
+               '*/.DS_Store' -x '*.log'
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "Archive: $name ($(stat -c%s "$name") bytes)"
+
+      # NOTE: zenodo_get is a DOWNLOAD tool and has no upload mode. The deposit
+      # goes directly against the Zenodo REST API:
+      #   1. POST /api/deposit/depositions        -> creates the draft
+      #   2. PUT  <bucket>/<filename>              -> uploads the archive
+      #   3. POST /api/deposit/depositions/<id>/actions/publish
+      - name: Publish to Zenodo
+        id: deposit
+        env:
+          ZENODO_SANDBOX: "false"
+          ZENODO_TOKEN: ${{ secrets.ZENODO_TOKEN }}
+          ARCHIVE_NAME: ${{ steps.archive.outputs.name }}
+        run: |
+          set -euo pipefail
+          if [ "$ZENODO_SANDBOX" = "true" ]; then
+            API="https://sandbox.zenodo.org/api"
+          else
+            API="https://zenodo.org/api"
+          fi
+
+          # 1. Create the deposition from .zenodo.json. Creator affiliation is
+          #    kept (Zenodo accepts it); the ORCID drives the DataCite push.
+          python - <<'PY' > metadata.json
+          import json
+          with open('.zenodo.json', encoding='utf-8') as fh:
+              md = json.load(fh)
+          json.dump({'metadata': md}, open('/dev/stdout', 'w'), ensure_ascii=False)
+          PY
+
+          code=$(curl -sS -o deposition.json -w '%{http_code}' \
+            -X POST "$API/deposit/depositions" \
+            -H "Authorization: Bearer $ZENODO_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data-binary @metadata.json)
+          if [ "$code" != "201" ]; then
+            echo "::error::deposition creation failed (HTTP $code)"
+            cat deposition.json
+            exit 1
+          fi
+          bucket=$(python -c "import json;print(json.load(open('deposition.json'))['links']['bucket'])")
+          id=$(python -c "import json;print(json.load(open('deposition.json'))['id'])")
+          echo "Deposition $id created"
+
+          # 2. Upload the archive into the deposition bucket.
+          #    The bucket is a file store, not a JSON resource: it only accepts a
+          #    streamed body. Sending an explicit Content-Type (or using
+          #    --data-binary, which implies application/x-www-form-urlencoded)
+          #    makes Zenodo answer 415 Unsupported Media Type. --upload-file
+          #    streams the raw bytes and lets Zenodo detect the type itself.
+          code=$(curl -sS -o upload.json -w '%{http_code}' \
+            -X PUT --upload-file "$ARCHIVE_NAME" \
+            -H "Authorization: Bearer $ZENODO_TOKEN" \
+            "$bucket/$ARCHIVE_NAME")
+          if [ "$code" != "200" ] && [ "$code" != "201" ]; then
+            echo "::error::archive upload failed (HTTP $code)"
+            cat upload.json
+            exit 1
+          fi
+          echo "Uploaded $ARCHIVE_NAME ($(stat -c%s "$ARCHIVE_NAME") bytes)"
+
+          # 3. Publish.
+          code=$(curl -sS -o published.json -w '%{http_code}' \
+            -X POST "$API/deposit/depositions/$id/actions/publish" \
+            -H "Authorization: Bearer $ZENODO_TOKEN")
+          if [ "$code" != "202" ]; then
+            echo "::error::publish failed (HTTP $code)"
+            cat published.json
+            exit 1
+          fi
+
+          doi=$(python -c "import json;print(json.load(open('published.json'))['doi'])")
+          echo "doi=$doi" >> "$GITHUB_OUTPUT"
+          echo "DOI: $doi"
+
+      - name: Record the minted DOI on the release
+        if: always() && steps.deposit.outputs.doi != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          DOI: ${{ steps.deposit.outputs.doi }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" --repo "$REPO" --json body --jq .body \
+            | grep -q "$DOI" \
+            || gh release edit "$TAG" --repo "$REPO" \
+                 --notes "Archived on Zenodo: https://doi.org/$DOI"
+          echo "DOI $DOI written to release $TAG"

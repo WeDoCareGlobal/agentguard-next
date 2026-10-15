@@ -1,0 +1,60 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          pip install --break-system-packages -e ".[dev]"
+          pip install --break-system-packages bandit safety pytest-cov
+      - name: Lint
+        run: ruff check agentguard/
+      - name: Typecheck
+        run: mypy agentguard/ --ignore-missing-imports
+      - name: Security scan (bandit)
+        run: bandit -r agentguard/ -f json -o bandit-report.json || true
+      - name: Security scan (safety)
+        run: safety check --json --output safety-report.json || true
+      - name: Test with coverage
+        run: python -m pytest tests/ -v --cov=agentguard --cov-report=xml --cov-fail-under=80
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: agentguard:test
+          load: true

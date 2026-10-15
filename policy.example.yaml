@@ -1,0 +1,18 @@
+# Example AgentGuard policy. Copy to policy.yaml and edit, or run:
+#   agentguard init --agent <your-agent>
+#
+# allowed_tools: if non-empty, ONLY these tools are permitted.
+# denied_tools: always wins over allowed_tools.
+# limits: enforced by check_rate_limit() -- max_calls_per_minute is the only
+#   limit currently enforced; the others are reserved.
+agent: researcher
+allowed_tools:
+  - web_search
+  - read_file
+denied_tools:
+  - send_email
+  - transfer_funds
+limits:
+  max_calls_per_minute: 60
+  max_usd_per_day: 5.0
+  max_tokens_per_call: 4000

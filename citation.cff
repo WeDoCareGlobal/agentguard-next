@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+title: "AgentGuard – Security & Governance Control Plane for Autonomous AI Agents"
+message: >-
+  If you use this software, please cite it as below.
+authors:
+  - family-names: "Perla"
+    given-names: "Emir"
+    orcid: "https://orcid.org/0009-0009-8515-2727"
+    affiliation: "We Do Care Global"
+    email: "emirperla96@gmail.com"
+version: "0.1.0"
+date-released: 2026-09-24
+url: "https://github.com/WeDoCareGlobal/agentguard-next"
+license: "Apache-2.0"
+keywords:
+  - "AI agents"
+  - "guardrails"
+  - "policy engine"
+  - "audit log"
+  - "MCP"
+repository-code: "https://github.com/WeDoCareGlobal/agentguard-next"

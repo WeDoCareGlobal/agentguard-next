@@ -1,0 +1,35 @@
+{
+  "title": "AgentGuard – Security & Governance Control Plane for Autonomous AI Agents",
+  "upload_type": "software",
+  "description": "Policy engine, tool‑call proxy, append‑only audit log, human‑in‑the‑loop approvals, and kill‑switch for LLM‑based agents.",
+  "creators": [
+    {
+      "name": "Perla, Emir",
+      "affiliation": "We Do Care Global",
+      "orcid": "0009-0009-8515-2727"
+    }
+  ],
+  "access_right": "open",
+  "license": "Apache-2.0",
+  "keywords": [
+    "AI agents",
+    "guardrails",
+    "policy engine",
+    "audit log",
+    "MCP"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/WeDoCareGlobal/agentguard-next",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    },
+    {
+      "identifier": "https://WeDoCareGlobal.github.io/agentguard-next/",
+      "relation": "isDocumentedBy",
+      "scheme": "url"
+    }
+  ],
+  "version": "0.1.2",
+  "publication_date": "2026-10-02"
+}
