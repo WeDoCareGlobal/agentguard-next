@@ -59,7 +59,7 @@ def test_exception_is_hidden(tmp_path):
 def test_api_auth(setup):
     from fastapi.testclient import TestClient
     g,_=setup
-    client=TestClient(create_app(g,'a'*32,'b'*32))
+    client=TestClient(create_app(g, 'a'*32, 'b'*32, enable_omniguard=False))
     assert client.post('/v1/execute',json={'agent':'a','tool':'read','request_id':'1','payload':{}}).status_code==401
     assert client.post('/v1/execute',headers={'x-api-key':'a'*32},json={'agent':'a','tool':'read','request_id':'1','payload':{}}).json()['decision']=='ALLOW'
     assert client.post('/v1/admin/halt',headers={'x-api-key':'a'*32},json={'enabled':True}).status_code==401

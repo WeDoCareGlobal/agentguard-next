@@ -35,7 +35,7 @@ def test_secret_adapter(monkeypatch):
 def test_console_auth_and_escape(tmp_path):
     g = Guard(str(tmp_path/'test.db'), b'k'*32, Policy(frozenset({'read'})), {'read':lambda x: 'ok'})
     g.execute('a','read',{'input':'<script>alert(1)</script>'},'req-1')
-    app = create_app(g, 'a'*32, 'b'*32)
+    app = create_app(g, 'a'*32, 'b'*32, enable_omniguard=False)
     attach_optional_console(app,g,'b'*32)
     c = TestClient(app)
     assert c.get('/v1/admin/console').status_code == 401
@@ -48,7 +48,7 @@ def test_console_auth_and_escape(tmp_path):
 def test_scoped_endpoint(tmp_path):
     from agentguard.api import attach_scoped_execution
     g = Guard(str(tmp_path/'scoped.db'), b'k'*32, Policy(frozenset({'read'})), {'read': lambda x: 'ok'})
-    app = create_app(g, 'a'*32, 'b'*32)
+    app = create_app(g, 'a'*32, 'b'*32, enable_omniguard=False)
     authority = TokenAuthority(b'x'*32)
     attach_scoped_execution(app, g, authority)
     c = TestClient(app)
