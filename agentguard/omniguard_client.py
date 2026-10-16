@@ -34,7 +34,7 @@ class OmniGuardClient:
         timeout: float = 30.0,
     ):
         self.base_url = base_url.rstrip("/")
-        self.api_key = api_key or os.environ.get("OMNIGUARD_API_KEY", "sk-admin-123")
+        self.api_key = api_key if api_key is not None else os.environ.get("OMNIGUARD_API_KEY")
         self.timeout = timeout
         self._client: httpx.AsyncClient | None = None
 
@@ -59,6 +59,8 @@ class OmniGuardClient:
         metadata: dict[str, Any] | None = None,
     ) -> OmniGuardResult:
         """Send messages to OmniGuard for inspection."""
+        if not self.api_key:
+            raise RuntimeError("OMNIGUARD_API_KEY must be configured")
         client = await self._get_client()
         payload = {
             "model": model,
@@ -67,6 +69,7 @@ class OmniGuardClient:
         }
         try:
             resp = await client.post("/chat/completions", json=payload)
+            resp.raise_for_status()
             decision_header = resp.headers.get("X-Governance-Decision", "BLOCK")
             decision = OmniGuardDecision(decision_header)
             return OmniGuardResult(
@@ -100,7 +103,7 @@ class OmniGuardClient:
             client = await self._get_client()
             resp = await client.get("/healthz")
             return resp.status_code == 200 and resp.json().get("status") == "healthy"
-        except Exception:
+        except Exception:  # noqa: BLE001 - health failures are always unhealthy
             return False
 
 
