@@ -1,11 +1,14 @@
 # AgentGuard — Security & Governance Control Plane for Autonomous AI Agents
 
+> **Development status:** This repository is a work in progress. The architecture and examples below are not a certification that every integration is implemented or production-validated. Review the current source, tests and release notes before deployment. Publication DOIs identify their recorded artifacts, not automatically the latest Next commit. See the [portfolio evidence index](https://wedocare-global.com/evidence.html).
+
+
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22945778.svg)](https://doi.org/10.5281/zenodo.22945778)
 [![ORCID](https://img.shields.io/badge/ORCID-0009--0009--8515--2727-green.svg)](https://orcid.org/0009-0009-8515-2727)
 [![We Do Care Global](https://img.shields.io/badge/We%20Do%20Care%20Global-Enterprise%20AI%20Governance-purple.svg)](https://wedocare-global.com/)
 
-**Part of the [We Do Care Global](https://wedocare-global.com/) ecosystem — 6 published systems, Apache-2.0 open source, 33% profits → humanitarian.**
+**Part of the [We Do Care Global](https://wedocare-global.com/) ecosystem — 6 published systems, Apache-2.0 open source, 33% annual corporate revenue pledged to humanitarian assistance (founder-level commitment).**
 
 ---
 
@@ -13,16 +16,16 @@
 
 AgentGuard is a **policy-aware agent control plane** with auditable decisions, explicit boundaries, and human oversight built into the architecture — not bolted on after the fact.
 
-This repository contains the **next-generation architecture** (Python 3.11+):
+**Target architecture** (Python 3.11+): the following lists design goals and integration surfaces, not a verified deployment matrix. Consult current implementation and status notes for each capability:
 - **PostgreSQL-backed coordination** — distributed approvals, kill-switch, reservations
 - **OIDC identity integration** — enterprise authentication
 - **Centralized HMAC audit log** — tamper-evident, append-only
 - **CLI & policy-as-code** — `policy.yaml` for declarative guardrails
-- **Docker/Compose ready** — production deployment in minutes
+- **Docker/Compose ready** — local development setup; production readiness requires separate validation
 
 ---
 
-## Capabilities
+## Capability targets and review areas
 
 | Layer | Features |
 |-------|----------|
@@ -36,7 +39,9 @@ This repository contains the **next-generation architecture** (Python 3.11+):
 
 ---
 
-## Quick Start
+## Development setup examples
+
+These examples require verification against the current CLI and configuration. They are not a production deployment guide.
 
 ### 1. Install
 ```bash
