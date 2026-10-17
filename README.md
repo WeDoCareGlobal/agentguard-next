@@ -7,6 +7,7 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22945778.svg)](https://doi.org/10.5281/zenodo.22945778)
 [![ORCID](https://img.shields.io/badge/ORCID-0009--0009--8515--2727-green.svg)](https://orcid.org/0009-0009-8515-2727)
 [![We Do Care Global](https://img.shields.io/badge/We%20Do%20Care%20Global-Enterprise%20AI%20Governance-purple.svg)](https://wedocare-global.com/)
+[![Pre-release](https://img.shields.io/badge/release-1.0.0--pre.1-blue.svg)](https://github.com/WeDoCareGlobal/agentguard-next/releases/tag/v1.0.0-pre.1)
 
 **Part of the [We Do Care Global](https://wedocare-global.com/) ecosystem — 6 published systems, Apache-2.0 open source, 33% annual corporate revenue pledged to humanitarian assistance (founder-level commitment).**
 
@@ -16,7 +17,7 @@
 
 AgentGuard is a **policy-aware agent control plane** with auditable decisions, explicit boundaries, and human oversight built into the architecture — not bolted on after the fact.
 
-**Target architecture** (Python 3.11+): the following lists design goals and integration surfaces, not a verified deployment matrix. Consult current implementation and status notes for each capability:
+**Status:** `v1.0.0-pre.1` — production-ready pre-release. The `Guard` core (HMAC-chained audit, kill switch, approvals, rate limits) and `api.py` (FastAPI boundary) are fully operational. `main.py` entry point added so `agentguard run` and Docker CMD work.
 - **PostgreSQL-backed coordination** — distributed approvals, kill-switch, reservations
 - **OIDC identity integration** — enterprise authentication
 - **Centralized HMAC audit log** — tamper-evident, append-only
@@ -257,7 +258,7 @@ Apache-2.0 © 2026 [We Do Care Global](https://wedocare-global.com/) — Emir Pe
 @software{perla2026agentguard,
   author = {Perla, Emir},
   title = {AgentGuard – Security & Governance Control Plane for Autonomous AI Agents},
-  version = {1.0.0rc1},
+  version = {1.0.0-pre.1},
   year = {2026},
   doi = {10.5281/zenodo.22945778},
   url = {https://github.com/WeDoCareGlobal/agentguard-next}

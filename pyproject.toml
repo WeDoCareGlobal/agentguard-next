@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 [project]
 name = "agentguard"
-version = "1.0.0rc1"
+version = "1.0.0-pre.1"
 description = "Security & Governance Control Plane for Autonomous AI Agents"
 readme = "README.md"
 license = {text = "Apache-2.0"}
