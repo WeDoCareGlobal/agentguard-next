@@ -33,8 +33,9 @@ class SharedControl:
 
     def is_halted(self) -> bool:
         with self.connection_factory() as conn:
-            row = conn.execute('SELECT enabled FROM ag_control WHERE name=%s', ('halt',)).fetchone()
-            return bool(row[0]) if row else False
+            with conn.transaction():
+                row = conn.execute('SELECT enabled FROM ag_control WHERE name=%s', ('halt',)).fetchone()
+                return bool(row[0]) if row else False
 
     def grant(self, agent: str, payload_hash: str, ttl: int = 120) -> str:
         if not agent or not payload_hash or not 1 <= ttl <= 3600:

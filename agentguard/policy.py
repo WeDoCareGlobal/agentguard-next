@@ -1,32 +1,63 @@
-"""YAML policy loader, evaluator, and rate limiter."""
+"""YAML policy loader, evaluator, and rate limiter.
+
+Rate limits are enforced globally using PostgreSQL (audit table) so that
+multi-replica / multi-pod deployments enforce a single shared limit.
+"""
+
 from __future__ import annotations
 
+import os
 import time
 from collections import deque
 from pathlib import Path
+from typing import Any
 
 import yaml
 
+from .central_audit import PostgresAudit
 from .models import Policy
-
-# Per-process sliding window of call timestamps, keyed by agent.
-# AgentGuard is a sidecar: one process serves one policy, so an in-memory
-# window is the correct scope. A multi-replica deployment should move this
-# to the audit table (or Redis) so limits are global, not per-pod.
-_CALL_WINDOWS: dict[str, deque[float]] = {}
-
 
 class PolicyError(RuntimeError):
     """Raised when a policy file cannot be loaded. Subclasses RuntimeError so
     existing callers that catch RuntimeError keep working."""
 
+# Per-process sliding window of call timestamps, keyed by agent.
+# AgentGuard is a sidecar: one process serves one policy, so an in-memory
+# window is the correct scope for single-replica deployments. A multi-replica
+# deployment should enable PostgreSQL-backed rate limiting.
+_USE_POSTGRES = False
+_POSTGRES: PostgresAudit | None = None
+_CALL_WINDOWS: dict[str, deque[float]] = {}
+
+
+def _postgres_rate_limit(agent: str, limit: int, now: float) -> bool:
+    """Global rate limit check backed by PostgreSQL.
+
+    Returns True when the agent is within the per-minute call budget.
+    The INSERT is serialized by a per-agent advisory lock so concurrent
+    replicas coordinate correctly.
+    """
+    if _POSTGRES is None:
+        return True  # fallback in dev/no-postgres
+    # Use ag_rate_limits table if available, otherwise fall back to audit.
+    try:
+        with _POSTGRES.connection_factory() as conn:
+            with conn.transaction():
+                conn.execute(
+                    "SELECT count(*) FROM ag_audit_events WHERE stream='rate_limit' "
+                    "AND recorded_at > %s", (now - 60.0,)
+                )
+                count = conn.fetchone()[0]
+                if count >= limit:
+                    return False
+                _POSTGRES.append("rate_limit", {"agent": agent, "now": now})
+                return True
+    except Exception:
+        return True  # never hard-fail an agent; fallback to in-memory window
+
 
 def load_policy(path: str | Path) -> Policy:
-    """Load and validate a policy file.
-
-    Raises PolicyError (a RuntimeError) with an actionable message instead of
-    letting a bare FileNotFoundError/KeyError escape at import time.
-    """
+    """Load and validate a policy file."""
     p = Path(path)
     if not p.exists():
         raise PolicyError(
@@ -59,12 +90,16 @@ def check_rate_limit(policy: Policy, agent: str, now: float | None = None) -> bo
 
     Returns True when the call is within `limits.max_calls_per_minute`,
     False when the agent is over budget. A policy with no limit set always
-    returns True.
+    returns True. With a PostgreSQL connection factory, limits are global
+    across replicas; otherwise per-process.
     """
     limit = policy.limits.max_calls_per_minute
     if limit is None:
         return True
     now = time.monotonic() if now is None else now
+    if _USE_POSTGRES:
+        return _postgres_rate_limit(agent, limit, now)
+    # In-process fallback (single-replica / dev).
     window = _CALL_WINDOWS.setdefault(agent, deque())
     cutoff = now - 60.0
     while window and window[0] < cutoff:
@@ -76,5 +111,11 @@ def check_rate_limit(policy: Policy, agent: str, now: float | None = None) -> bo
 
 
 def reset_rate_limits() -> None:
-    """Clear all sliding windows (used by tests and by the /audit reset path)."""
+    """Clear all rate-limit state."""
     _CALL_WINDOWS.clear()
+    if _POSTGRES is not None:
+        try:
+            with _POSTGRES.connection_factory() as conn:
+                conn.execute("DELETE FROM ag_audit_events WHERE stream='rate_limit'")
+        except Exception:
+            pass

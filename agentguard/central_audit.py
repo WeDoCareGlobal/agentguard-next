@@ -66,7 +66,8 @@ class PostgresAudit:
 
     def verify(self, stream: str) -> tuple[bool, int]:
         with self.connection_factory() as conn:
-            rows = conn.execute('SELECT sequence,recorded_at,event_json,prev_mac,mac FROM ag_audit_events WHERE stream=%s ORDER BY sequence', (stream,)).fetchall()
+            with conn.transaction():
+                rows = conn.execute('SELECT sequence,recorded_at,event_json,prev_mac,mac FROM ag_audit_events WHERE stream=%s ORDER BY sequence', (stream,)).fetchall()
         previous = '0'*64
         for expected, (seq, timestamp, body, prev, mac) in enumerate(rows, 1):
             if seq != expected or not hmac.compare_digest(prev, previous):

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -34,7 +35,8 @@ class OmniGuardClient:
         timeout: float = 30.0,
     ):
         self.base_url = base_url.rstrip("/")
-        self.api_key = api_key or os.environ.get("OMNIGUARD_API_KEY", "sk-admin-123")
+        # Read API key from env; never embed default secrets in code.
+        self.api_key = api_key or os.environ.get("OMNIGUARD_API_KEY")
         self.timeout = timeout
         self._client: httpx.AsyncClient | None = None
 
@@ -42,7 +44,7 @@ class OmniGuardClient:
         if self._client is None:
             self._client = httpx.AsyncClient(
                 base_url=self.base_url,
-                headers={"X-API-Key": self.api_key},
+                headers=httpx.Headers({"X-API-Key": self.api_key or ""}),
                 timeout=self.timeout,
             )
         return self._client
@@ -106,12 +108,16 @@ class OmniGuardClient:
 
 # Singleton instance
 _omniguard_client: OmniGuardClient | None = None
+_omniguard_lock = threading.Lock()
 
 
 def get_omniguard_client() -> OmniGuardClient:
+    """Thread-safe lazy singleton for the OmniGuard client."""
     global _omniguard_client
     if _omniguard_client is None:
-        _omniguard_client = OmniGuardClient()
+        with _omniguard_lock:
+            if _omniguard_client is None:
+                _omniguard_client = OmniGuardClient()
     return _omniguard_client
 
 
