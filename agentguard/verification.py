@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -171,6 +172,7 @@ class ProofVerifier:
             data = f"{agent}|{tool}|{hashlib.sha256(str(payload).encode()).hexdigest()}".encode()
             expected = hmac.new(self.key, data, hashlib.sha256).hexdigest()[:32]
         except Exception:
+            logging.exception("Proof computation error")
             latency = (time.perf_counter() - t0) * 1000.0
             return LayerResult("proof", False, latency, "proof_computation_error")
         if not hmac.compare_digest(proof[:32], expected):
