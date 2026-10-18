@@ -44,9 +44,9 @@ def init(
 @app.command()
 def run(
     policy: Path = typer.Option("policy.yaml", help="Path to policy YAML"),  # noqa: B008
-    host: str = typer.Option("0.0.0.0", help="Host to bind"),  # noqa: B008
-    port: int = typer.Option(8000, help="Port to bind"),  # noqa: B008
-    reload: bool = typer.Option(False, help="Enable uvicorn reload (dev)"),  # noqa: B008
+    host: str = typer.Option("0.0.0.0", help="Host to bind"),
+    port: int = typer.Option(8000, help="Port to bind"),
+    reload: bool = typer.Option(False, help="Enable uvicorn reload (dev)"),
 ):
     """Run the agentguard FastAPI server."""
     # Validate policy early

@@ -30,7 +30,7 @@ jobs:
       - name: Security scan (bandit)
         run: bandit -r agentguard/ -f json -o bandit-report.json
       - name: Security scan (safety)
-        run: safety check --plain --json --output safety-report.json
+        run: safety check --offline --json --output safety-report.json
       - name: Test with coverage
         run: python -m pytest tests/ -v --cov=agentguard --cov-report=xml --cov-fail-under=80
 
