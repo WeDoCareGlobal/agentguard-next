@@ -7,10 +7,13 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 import sqlite3
 import threading
 import time
+
+logger = logging.getLogger(__name__)
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -219,7 +222,7 @@ class Guard:
                     try:
                         self.central_audit.append("enforcement", {"event": "execution_failed", "request_id": request_id})
                     except Exception:
-                        pass
+                        logger.exception("Central audit append failed")
                 self._audit({"event": "execution_failed", "request_id": request_id})
                 return {"decision": "ERROR", "reason": "tool_execution_failed"}
 

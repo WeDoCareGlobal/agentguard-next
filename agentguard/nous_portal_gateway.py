@@ -128,7 +128,7 @@ class PerToolGateway:
         payload: dict[str, Any],
         user: str,
         tool_credential: ToolCredential,
-        audit_event: Callable[[dict[str, Any]], None] = None,
+        audit_event: Callable[[dict[str, Any]], None] | None = None,
     ) -> RouteDecision:
         """Route a tool call with per-tool credential validation.
 
