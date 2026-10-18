@@ -21,6 +21,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class LayerResult:
@@ -172,7 +174,7 @@ class ProofVerifier:
             data = f"{agent}|{tool}|{hashlib.sha256(str(payload).encode()).hexdigest()}".encode()
             expected = hmac.new(self.key, data, hashlib.sha256).hexdigest()[:32]
         except Exception:
-            logging.exception("Proof computation error")
+            logger.exception("Proof computation error")
             latency = (time.perf_counter() - t0) * 1000.0
             return LayerResult("proof", False, latency, "proof_computation_error")
         if not hmac.compare_digest(proof[:32], expected):

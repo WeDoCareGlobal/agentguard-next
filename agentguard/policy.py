@@ -76,7 +76,9 @@ def load_policy(path: str | Path) -> Policy:
 
 
 def is_allowed(policy: Policy, tool: str) -> bool:
-    if tool in policy.denied_tools or (policy.allowed_tools and tool not in policy.allowed_tools):
+    if tool in policy.denied_tools:
+        return False
+    if policy.allowed_tools and tool not in policy.allowed_tools:
         return False
     return True
 
