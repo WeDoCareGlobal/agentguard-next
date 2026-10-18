@@ -16,8 +16,8 @@ from __future__ import annotations
 import hashlib
 import hmac
 import time
-from dataclasses import dataclass, field
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any
 
 

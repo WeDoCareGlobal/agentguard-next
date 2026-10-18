@@ -18,10 +18,11 @@ from __future__ import annotations
 import hashlib
 import hmac
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
-from .nous_portal import NousPortalRouter, ProviderConfig, RouteDecision
+from .nous_portal import NousPortalRouter, RouteDecision
 
 
 @dataclass(frozen=True)

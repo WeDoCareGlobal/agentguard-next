@@ -16,14 +16,15 @@ Environment variables:
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
-
-from typing import Any, Callable
+from typing import Any
 
 from fastapi import FastAPI
 
-from .api import attach_optional_console, attach_oidc_execution, attach_scoped_execution, create_app
-from .core import Guard, Policy as CorePolicy
+from .api import attach_optional_console, create_app
+from .core import Guard
+from .core import Policy as CorePolicy
 from .models import Policy as ModelPolicy
 from .policy import load_policy
 

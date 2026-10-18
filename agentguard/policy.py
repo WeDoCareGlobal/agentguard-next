@@ -15,6 +15,7 @@ import yaml
 from .central_audit import PostgresAudit
 from .models import Policy
 
+
 class PolicyError(RuntimeError):
     """Raised when a policy file cannot be loaded. Subclasses RuntimeError so
     existing callers that catch RuntimeError keep working."""
