@@ -7,6 +7,7 @@ multi-replica / multi-pod deployments enforce a single shared limit.
 from __future__ import annotations
 
 import time
+import logging
 from collections import deque
 from pathlib import Path
 
@@ -51,6 +52,7 @@ def _postgres_rate_limit(agent: str, limit: int, now: float) -> bool:
             _POSTGRES.append("rate_limit", {"agent": agent, "now": now})
             return True
     except Exception:
+        logging.exception("Rate limit check failed")  # nosec: BLE001 - intentional fail-open, never hard-fail an agent
         return True  # never hard-fail an agent; fallback to in-memory window
 
 
@@ -116,4 +118,4 @@ def reset_rate_limits() -> None:
             with _POSTGRES.connection_factory() as conn:
                 conn.execute("DELETE FROM ag_audit_events WHERE stream='rate_limit'")
         except Exception:
-            pass
+            logging.exception("Rate limit reset failed")  # nosec: BLE001 - intentional fail-open, non-critical cleanup

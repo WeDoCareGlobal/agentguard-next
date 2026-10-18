@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import logging
 import threading
 from dataclasses import dataclass
 from enum import Enum
@@ -103,6 +104,7 @@ class OmniGuardClient:
             resp = await client.get("/healthz")
             return resp.status_code == 200 and resp.json().get("status") == "healthy"
         except Exception:
+            logging.exception("OmniGuard health check failed")
             return False
 
 
