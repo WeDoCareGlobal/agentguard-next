@@ -135,7 +135,6 @@ class IntentVerifier:
 
     def verify(self, agent: str, tool: str, payload: Any) -> LayerResult:
         t0 = time.perf_counter()
-        category = self._heuristics.get(tool, "unknown")
         # Simulate LLM intent classification (300-800ms envelope)
         import time as _t
         _t.sleep(0.35)  # nominal ~350ms; production: actual LLM call
@@ -143,10 +142,9 @@ class IntentVerifier:
         # Approval gates on intent: data_mutate + approval_required
         decision = True
         reason = "intent_approved"
-        if tool in ("write", "delete", "deploy", "restart", "config"):
-            if not any(k in str(payload) for k in ("confirm", "approved", "consent")):
-                decision = False
-                reason = "intent_requires_consent"
+        if tool in ("write", "delete", "deploy", "restart", "config") and not any(k in str(payload) for k in ("confirm", "approved", "consent")):
+            decision = False
+            reason = "intent_requires_consent"
         return LayerResult("intent", decision, latency, reason)
 
 

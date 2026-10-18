@@ -40,17 +40,16 @@ def _postgres_rate_limit(agent: str, limit: int, now: float) -> bool:
         return True  # fallback in dev/no-postgres
     # Use ag_rate_limits table if available, otherwise fall back to audit.
     try:
-        with _POSTGRES.connection_factory() as conn:
-            with conn.transaction():
-                conn.execute(
-                    "SELECT count(*) FROM ag_audit_events WHERE stream='rate_limit' "
-                    "AND recorded_at > %s", (now - 60.0,)
-                )
-                count = conn.fetchone()[0]
-                if count >= limit:
-                    return False
-                _POSTGRES.append("rate_limit", {"agent": agent, "now": now})
-                return True
+        with _POSTGRES.connection_factory() as conn, conn.transaction():
+            conn.execute(
+                "SELECT count(*) FROM ag_audit_events WHERE stream='rate_limit' "
+                "AND recorded_at > %s", (now - 60.0,)
+            )
+            count = conn.fetchone()[0]
+            if count >= limit:
+                return False
+            _POSTGRES.append("rate_limit", {"agent": agent, "now": now})
+            return True
     except Exception:
         return True  # never hard-fail an agent; fallback to in-memory window
 
