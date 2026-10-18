@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import hmac
+import logging
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from .core import Guard
+from .identity import TokenAuthority
 from .oidc import OIDCVerifier
 
 # OmniGuard integration
@@ -17,6 +19,8 @@ try:
 except ImportError:
     OMNIGUARD_AVAILABLE = False
     OmniGuardDecision = None
+
+logger = logging.getLogger(__name__)
 
 class Call(BaseModel):
     agent: str = Field(min_length=1, max_length=128)
@@ -48,7 +52,7 @@ async def _omniguard_inspect(agent: str, tool: str, payload: Any) -> str | None:
         if result.decision == OmniGuardDecision.BLOCK:
             return result.blocked_reason or "OmniGuard policy violation"
     except Exception:
-        # Fail-open for OmniGuard errors (don't block legitimate calls if OmniGuard is down)
+        logger.exception("OmniGuard inspection failed")  # nosec: BLE001/S110 - intentional fail-open, never block legitimate calls
         pass
     return None
 
