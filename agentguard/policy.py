@@ -6,11 +6,9 @@ multi-replica / multi-pod deployments enforce a single shared limit.
 
 from __future__ import annotations
 
-import os
 import time
 from collections import deque
 from pathlib import Path
-from typing import Any
 
 import yaml
 
