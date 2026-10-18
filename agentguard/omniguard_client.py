@@ -1,14 +1,16 @@
 """OmniGuard client for FoundationCentar-Next integration."""
 from __future__ import annotations
 
-import os
 import logging
+import os
 import threading
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class OmniGuardDecision(str, Enum):
@@ -104,7 +106,7 @@ class OmniGuardClient:
             resp = await client.get("/healthz")
             return resp.status_code == 200 and resp.json().get("status") == "healthy"
         except Exception:
-            logging.exception("OmniGuard health check failed")
+            logger.exception("OmniGuard health check failed")
             return False
 
 
