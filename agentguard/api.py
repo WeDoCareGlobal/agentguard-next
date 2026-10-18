@@ -53,7 +53,6 @@ async def _omniguard_inspect(agent: str, tool: str, payload: Any) -> str | None:
             return result.blocked_reason or "OmniGuard policy violation"
     except Exception:
         logger.exception("OmniGuard inspection failed")  # nosec: BLE001/S110 - intentional fail-open, never block legitimate calls
-        pass
     return None
 
 def create_app(guard: Guard, api_key: str, admin_key: str, enable_omniguard: bool = True) -> FastAPI:
