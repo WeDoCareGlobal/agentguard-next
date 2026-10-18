@@ -1,8 +1,8 @@
 """Typer‑based CLI for agentguard."""
 from __future__ import annotations
 
-import os
 import logging
+import os
 from pathlib import Path
 
 import typer
@@ -24,7 +24,7 @@ def init(
     out: Path = typer.Option("policy.yaml", help="Where to write example policy"),  # noqa: B008
     max_cpm: int = typer.Option(
         60, help="Enforced rate limit: max tool calls per minute (0 = unlimited)"
-    ),  # noqa: B008
+    ),
 ):
     """Create a starter policy.yaml."""
     example = Policy(

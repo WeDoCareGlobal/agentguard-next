@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --break-system-packages -e ".[dev]"
-          pip install --break-system-packages bandit==1.7.0 safety==1.10.2 pytest-cov packaging==21.3
+          pip install --break-system-packages bandit==1.7.0 pip-audit pytest-cov packaging==21.3
       - name: Lint
         run: ruff check agentguard/
       - name: Typecheck
@@ -30,7 +30,7 @@ jobs:
       - name: Security scan (bandit)
         run: bandit -r agentguard/ -f json -o bandit-report.json
       - name: Security scan (safety)
-        run: safety check --offline --json --output safety-report.json
+        run: pip-audit --format=json --output=safety-report.json
       - name: Test with coverage
         run: python -m pytest tests/ -v --cov=agentguard --cov-report=xml --cov-fail-under=80
 
