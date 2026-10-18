@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import os
+import logging
 from pathlib import Path
 
 import typer
 import uvicorn
 import yaml
+
+logger = logging.getLogger(__name__)
 
 from .models import Limits, Policy
 from .policy import load_policy
@@ -18,10 +21,10 @@ cli = app
 @app.command()
 def init(
     agent: str = typer.Option(..., help="Agent name, e.g. research-bot"),
-    out: Path = typer.Option("policy.yaml", help="Where to write example policy"),
+    out: Path = typer.Option("policy.yaml", help="Where to write example policy"),  # noqa: B008
     max_cpm: int = typer.Option(
         60, help="Enforced rate limit: max tool calls per minute (0 = unlimited)"
-    ),
+    ),  # noqa: B008
 ):
     """Create a starter policy.yaml."""
     example = Policy(
@@ -40,16 +43,17 @@ def init(
 
 @app.command()
 def run(
-    policy: Path = typer.Option("policy.yaml", help="Path to policy YAML"),
-    host: str = typer.Option("0.0.0.0", help="Host to bind"),
-    port: int = typer.Option(8000, help="Port to bind"),
-    reload: bool = typer.Option(False, help="Enable uvicorn reload (dev)"),
+    policy: Path = typer.Option("policy.yaml", help="Path to policy YAML"),  # noqa: B008
+    host: str = typer.Option("0.0.0.0", help="Host to bind"),  # noqa: B008
+    port: int = typer.Option(8000, help="Port to bind"),  # noqa: B008
+    reload: bool = typer.Option(False, help="Enable uvicorn reload (dev)"),  # noqa: B008
 ):
     """Run the agentguard FastAPI server."""
     # Validate policy early
     try:
         load_policy(policy)
     except Exception as e:
+        logger.exception("Invalid policy")
         typer.secho(f"❌ Invalid policy: {e}", fg=typer.colors.RED)
         raise typer.Exit(code=1)
 

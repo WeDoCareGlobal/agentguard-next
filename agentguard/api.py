@@ -8,6 +8,7 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from .core import Guard
+from .oidc import OIDCVerifier
 
 # OmniGuard integration
 try:
