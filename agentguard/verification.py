@@ -17,7 +17,8 @@ import hashlib
 import hmac
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Any
+from collections.abc import Callable
+from typing import Any
 
 
 @dataclass(frozen=True)
