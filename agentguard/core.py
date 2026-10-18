@@ -80,6 +80,7 @@ class Guard:
                     valid, checked = self.central_audit.verify("enforcement")
                     central = {"valid": bool(valid), "checked": checked}
                 except Exception:
+                    logger.exception("Central audit verify failed")
                     central = {"valid": False, "error": "unavailable"}
             return {"local_valid": local, "local_events": count, "central": central,
                     "healthy": local and (central is None or central.get("valid") is True)}
@@ -137,6 +138,7 @@ class Guard:
             try:
                 halted = self.shared_control.is_halted() if self.shared_control is not None else self.db.execute("SELECT value FROM settings WHERE name='halt'").fetchone() == ("1",)
             except Exception:
+                logger.exception("Shared control halt check failed")
                 halted = True  # Shared control unavailable: fail closed.
             if halted:
                 decision, reason = "DENY", "kill_switch"
@@ -155,6 +157,7 @@ class Guard:
                     try:
                         approved = self.shared_control.consume(agent, fp, approval)
                     except Exception:
+                        logger.exception("Shared control consume failed")
                         approved = False
                 else:
                     token_hash = hashlib.sha256((approval or "").encode()).hexdigest()
@@ -174,6 +177,7 @@ class Guard:
                         approval_required=decision == "APPROVAL_REQUIRED",
                         approval_token=approval)
                 except Exception:
+                    logger.exception("Coordinator admit failed")
                     admitted, reason = False, "coordination_unavailable"
                 decision = "ALLOW" if admitted else "DENY"
             if decision == "ALLOW" and self.coordinator is None and self.reservation_store is not None:
@@ -182,6 +186,7 @@ class Guard:
                 try:
                     reserved = self.reservation_store.reserve(request_id, agent, fp, self.max_per_minute)
                 except Exception:
+                    logger.exception("Reservation store reserve failed")
                     reserved = False
                     reason = "coordination_unavailable"
                 if not reserved:
@@ -200,6 +205,7 @@ class Guard:
                 try:
                     self.central_audit.append("enforcement", {"event": "decision", "agent": agent, "tool": tool, "request_id": request_id, "decision": decision, "reason": reason})
                 except Exception:
+                    logger.exception("Central audit append failed")
                     # Never execute when the required centralized audit is unavailable.
                     decision, reason = "DENY", "central_audit_unavailable"
             self.db.execute("INSERT INTO requests(request_id,agent,fingerprint,outcome) VALUES(?,?,?,?)", (request_id, agent, fp, decision))
@@ -213,11 +219,13 @@ class Guard:
                     try:
                         self.central_audit.append("enforcement", {"event": "execution_completed", "request_id": request_id})
                     except Exception:
+                        logger.exception("Central audit append execution_completed failed")
                         self._audit({"event": "central_audit_failed_after_execution", "request_id": request_id})
                         return {"decision": "ERROR", "reason": "central_audit_unavailable_after_execution"}
                 self._audit({"event": "execution_completed", "request_id": request_id})
                 return {"decision": "ALLOW", "result": result}
             except Exception:
+                logger.exception("Tool execution failed")
                 if self.central_audit is not None:
                     try:
                         self.central_audit.append("enforcement", {"event": "execution_failed", "request_id": request_id})
