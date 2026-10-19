@@ -111,7 +111,8 @@ class Guard:
             if not self.verify_audit():
                 raise RuntimeError("audit_integrity_failure")
         if self.shared_control is not None:
-            return self.shared_control.grant(agent, fingerprint(agent, tool, payload), ttl)
+            result = self.shared_control.grant(agent, fingerprint(agent, tool, payload), ttl)
+            return str(result)
         token = secrets.token_urlsafe(32)
         with self.lock:
             self.db.execute("INSERT INTO approvals(token_hash,agent,fingerprint,expires) VALUES(?,?,?,?)", (hashlib.sha256(token.encode()).hexdigest(), agent, fingerprint(agent, tool, payload), time.time() + ttl))

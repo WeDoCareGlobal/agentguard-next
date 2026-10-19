@@ -54,3 +54,4 @@ class PostgresCoordinator:
                 conn.execute('INSERT INTO ag_admissions(request_id,agent,fingerprint,created_at) VALUES (%s,%s,%s,%s)',(request_id,agent,fingerprint,now))
                 conn.execute('INSERT INTO ag_admission_audit(request_id,agent,decision,recorded_at) VALUES (%s,%s,%s,%s)',(request_id,agent,'ADMITTED',now))
                 return True, 'admitted'
+            return True, 'admitted'
