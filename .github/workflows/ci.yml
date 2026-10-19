@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --break-system-packages -e ".[dev]"
-          pip install --break-system-packages bandit==1.7.0 pip-audit pytest-cov packaging==21.3
+          pip install --break-system-packages bandit==1.7.0 pbr==6.0.0 pip-audit cyclonedx-python pytest-cov packaging==21.3
       - name: Lint
         run: ruff check agentguard/
       - name: Typecheck
