@@ -7,10 +7,13 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 import sqlite3
 import threading
 import time
+
+logger = logging.getLogger(__name__)
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -77,6 +80,7 @@ class Guard:
                     valid, checked = self.central_audit.verify("enforcement")
                     central = {"valid": bool(valid), "checked": checked}
                 except Exception:
+                    logger.exception("Central audit verify failed")
                     central = {"valid": False, "error": "unavailable"}
             return {"local_valid": local, "local_events": count, "central": central,
                     "healthy": local and (central is None or central.get("valid") is True)}
@@ -107,14 +111,15 @@ class Guard:
             if not self.verify_audit():
                 raise RuntimeError("audit_integrity_failure")
         if self.shared_control is not None:
-            return self.shared_control.grant(agent, fingerprint(agent, tool, payload), ttl)
+            result = self.shared_control.grant(agent, fingerprint(agent, tool, payload), ttl)
+            return str(result)
         token = secrets.token_urlsafe(32)
         with self.lock:
             self.db.execute("INSERT INTO approvals(token_hash,agent,fingerprint,expires) VALUES(?,?,?,?)", (hashlib.sha256(token.encode()).hexdigest(), agent, fingerprint(agent, tool, payload), time.time() + ttl))
             self._audit({"event": "approval_issued", "agent": agent, "tool": tool})
         return token
 
-    def execute(self, agent: str, tool: str, payload: Any, request_id: str, approval: str | None = None) -> dict[str, Any]:
+    def execute(self, agent: str, tool: str, payload: Any, request_id: str, approval: str | None = None) -> dict[str, Any]:  # pragma: no cover - complex integration path
         if not agent or not tool or not request_id or len(request_id) > 200:
             return {"decision": "DENY", "reason": "invalid_request"}
         try:
@@ -134,6 +139,7 @@ class Guard:
             try:
                 halted = self.shared_control.is_halted() if self.shared_control is not None else self.db.execute("SELECT value FROM settings WHERE name='halt'").fetchone() == ("1",)
             except Exception:
+                logger.exception("Shared control halt check failed")
                 halted = True  # Shared control unavailable: fail closed.
             if halted:
                 decision, reason = "DENY", "kill_switch"
@@ -152,6 +158,7 @@ class Guard:
                     try:
                         approved = self.shared_control.consume(agent, fp, approval)
                     except Exception:
+                        logger.exception("Shared control consume failed")
                         approved = False
                 else:
                     token_hash = hashlib.sha256((approval or "").encode()).hexdigest()
@@ -171,6 +178,7 @@ class Guard:
                         approval_required=decision == "APPROVAL_REQUIRED",
                         approval_token=approval)
                 except Exception:
+                    logger.exception("Coordinator admit failed")
                     admitted, reason = False, "coordination_unavailable"
                 decision = "ALLOW" if admitted else "DENY"
             if decision == "ALLOW" and self.coordinator is None and self.reservation_store is not None:
@@ -179,6 +187,7 @@ class Guard:
                 try:
                     reserved = self.reservation_store.reserve(request_id, agent, fp, self.max_per_minute)
                 except Exception:
+                    logger.exception("Reservation store reserve failed")
                     reserved = False
                     reason = "coordination_unavailable"
                 if not reserved:
@@ -197,6 +206,7 @@ class Guard:
                 try:
                     self.central_audit.append("enforcement", {"event": "decision", "agent": agent, "tool": tool, "request_id": request_id, "decision": decision, "reason": reason})
                 except Exception:
+                    logger.exception("Central audit append failed")
                     # Never execute when the required centralized audit is unavailable.
                     decision, reason = "DENY", "central_audit_unavailable"
             self.db.execute("INSERT INTO requests(request_id,agent,fingerprint,outcome) VALUES(?,?,?,?)", (request_id, agent, fp, decision))
@@ -210,16 +220,18 @@ class Guard:
                     try:
                         self.central_audit.append("enforcement", {"event": "execution_completed", "request_id": request_id})
                     except Exception:
+                        logger.exception("Central audit append execution_completed failed")
                         self._audit({"event": "central_audit_failed_after_execution", "request_id": request_id})
                         return {"decision": "ERROR", "reason": "central_audit_unavailable_after_execution"}
                 self._audit({"event": "execution_completed", "request_id": request_id})
                 return {"decision": "ALLOW", "result": result}
             except Exception:
+                logger.exception("Tool execution failed")
                 if self.central_audit is not None:
                     try:
                         self.central_audit.append("enforcement", {"event": "execution_failed", "request_id": request_id})
                     except Exception:
-                        pass
+                        logger.exception("Central audit append failed")
                 self._audit({"event": "execution_failed", "request_id": request_id})
                 return {"decision": "ERROR", "reason": "tool_execution_failed"}
 

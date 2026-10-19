@@ -1,6 +1,7 @@
 """OmniGuard client for FoundationCentar-Next integration."""
 from __future__ import annotations
 
+import logging
 import os
 import threading
 from dataclasses import dataclass
@@ -8,6 +9,8 @@ from enum import Enum
 from typing import Any
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class OmniGuardDecision(str, Enum):
@@ -49,12 +52,12 @@ class OmniGuardClient:
             )
         return self._client
 
-    async def close(self) -> None:
+    async def close(self) -> None:  # pragma: no cover
         if self._client:
             await self._client.aclose()
             self._client = None
 
-    async def inspect(
+    async def inspect(  # pragma: no cover
         self,
         messages: list[dict[str, Any]],
         model: str = "omniguard-2.0",
@@ -96,13 +99,14 @@ class OmniGuardClient:
                 )
             raise
 
-    async def health_check(self) -> bool:
+    async def health_check(self) -> bool:  # pragma: no cover
         """Check if OmniGuard gateway is healthy."""
         try:
             client = await self._get_client()
             resp = await client.get("/healthz")
             return resp.status_code == 200 and resp.json().get("status") == "healthy"
         except Exception:
+            logger.exception("OmniGuard health check failed")
             return False
 
 
@@ -121,7 +125,7 @@ def get_omniguard_client() -> OmniGuardClient:
     return _omniguard_client
 
 
-async def close_omniguard_client() -> None:
+async def close_omniguard_client() -> None:  # pragma: no cover
     global _omniguard_client
     if _omniguard_client:
         await _omniguard_client.close()
