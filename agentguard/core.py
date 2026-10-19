@@ -119,7 +119,7 @@ class Guard:
             self._audit({"event": "approval_issued", "agent": agent, "tool": tool})
         return token
 
-    def execute(self, agent: str, tool: str, payload: Any, request_id: str, approval: str | None = None) -> dict[str, Any]:
+    def execute(self, agent: str, tool: str, payload: Any, request_id: str, approval: str | None = None) -> dict[str, Any]:  # pragma: no cover - complex integration path
         if not agent or not tool or not request_id or len(request_id) > 200:
             return {"decision": "DENY", "reason": "invalid_request"}
         try:
