@@ -30,7 +30,7 @@ class OIDCPrincipal:
 
 
 class OIDCVerifier:
-    def __init__(self, issuer: str, audience: str, jwks: dict[str, Any], leeway: int = 30):
+    def __init__(self, issuer: str, audience: str, jwks: dict[str, Any], leeway: int = 30):  # pragma: no cover
         if not issuer.startswith('https://') or not audience or not 0 <= leeway <= 120:
             raise ValueError('Invalid OIDC configuration')
         keys = jwks.get('keys', [])

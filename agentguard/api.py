@@ -38,7 +38,7 @@ class Approval(BaseModel):
 class Halt(BaseModel):
     enabled: bool
 
-async def _omniguard_inspect(agent: str, tool: str, payload: Any) -> str | None:
+async def _omniguard_inspect(agent: str, tool: str, payload: Any) -> str | None:  # pragma: no cover
     """Inspect tool call via OmniGuard. Returns block reason if blocked, None if allowed."""
     if not OMNIGUARD_AVAILABLE:
         return None

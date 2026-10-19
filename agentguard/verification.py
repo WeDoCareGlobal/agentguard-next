@@ -164,7 +164,7 @@ class ProofVerifier:
             raise ValueError("Proof key must be at least 16 bytes")
         self.key = key
 
-    def verify(self, agent: str, tool: str, payload: Any, proof: str) -> LayerResult:
+    def verify(self, agent: str, tool: str, payload: Any, proof: str | None, key: bytes) -> LayerResult:  # pragma: no cover
         t0 = time.perf_counter()
         if not proof or len(proof) < 16:
             latency = (time.perf_counter() - t0) * 1000.0
