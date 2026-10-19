@@ -18,7 +18,7 @@ try:
     OMNIGUARD_AVAILABLE = True
 except ImportError:
     OMNIGUARD_AVAILABLE = False
-    OmniGuardDecision: Any = None
+    OmniGuardDecision = None
 
 logger = logging.getLogger(__name__)
 
