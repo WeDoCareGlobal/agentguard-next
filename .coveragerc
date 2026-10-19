@@ -1,0 +1,9 @@
+[run]
+omit =
+    agentguard/omniguard_client.py
+    agentguard/vault_http.py
+    agentguard/postgres.py
+
+[report]
+exclude_lines =
+    pragma: no cover
