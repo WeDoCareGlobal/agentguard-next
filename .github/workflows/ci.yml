@@ -23,6 +23,8 @@ jobs:
         run: |
           pip install --break-system-packages -e ".[dev]"
           pip install --break-system-packages bandit safety pytest-cov
+      - name: Test with coverage
+        run: python -m pytest tests/ -v --cov=agentguard --cov-report=xml --cov-fail-under=80
       - name: Lint
         run: ruff check agentguard/
       - name: Typecheck
@@ -31,8 +33,6 @@ jobs:
         run: bandit -r agentguard/ -f json -o bandit-report.json || true
       - name: Security scan (safety)
         run: safety check --json --output safety-report.json || true
-      - name: Test with coverage
-        run: python -m pytest tests/ -v --cov=agentguard --cov-report=xml --cov-fail-under=80
 
   security:
     runs-on: ubuntu-latest
