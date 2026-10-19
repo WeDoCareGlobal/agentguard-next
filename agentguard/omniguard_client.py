@@ -113,9 +113,13 @@ class OmniGuardClient:
                 timeout=self.timeout,
             )
             resp = await health_client.get("/healthz")
-            health_client.aclose()
+            await health_client.aclose()
             return resp.status_code == 200 and resp.json().get("status") == "healthy"
         except Exception:
+            try:
+                await health_client.aclose()
+            except Exception:
+                pass
             return False
 
 
