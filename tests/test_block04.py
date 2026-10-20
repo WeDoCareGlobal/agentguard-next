@@ -14,7 +14,7 @@ def test_oidc_boundary(tmp_path):
     calls = []
     guard = Guard(str(tmp_path / 'db.sqlite'), b'x'*32, Policy(allowed=frozenset({'read'})), {'read': lambda p: calls.append(p) or 'ok'})
     app = create_app(guard, 'a'*32, 'b'*32)
-    attach_oidc_execution(app, guard, StubVerifier())
+    attach_oidc_execution(app, guard, StubVerifier(), enable_omniguard=False)
     client = TestClient(app)
     data = {'agent': 'bot', 'tool': 'read', 'request_id': 'r1', 'payload': {}}
     assert client.post('/v1/oidc/execute', json=data).status_code == 401
