@@ -68,7 +68,24 @@ class OmniGuardClient:
             "metadata": metadata or {},
         }
         try:
-            resp = await client.post("/chat/completions", json=payload)
+            resp = await client.post("chat/completions", json=payload)
+            if resp.status_code == 403:
+                try:
+                    error = resp.json()
+                    reason = error.get("block_reason") or error.get("error") or error.get("detail")
+                except (ValueError, AttributeError):
+                    reason = "OmniGuard blocked request"
+                return OmniGuardResult(
+                    decision=OmniGuardDecision.BLOCK,
+                    confidence=1.0,
+                    signature=resp.headers.get("X-Governance-Signature", ""),
+                    latency_ms=0.0,
+                    tier_latencies={},
+                    blocked_reason=str(reason),
+                )
+            resp.raise_for_status()
+            if resp.status_code != 200 or resp.headers.get("X-Governance-Decision") != "ALLOW":
+                raise ValueError("OmniGuard did not explicitly allow execution")
             decision_header = resp.headers.get("X-Governance-Decision", "BLOCK")
             decision = OmniGuardDecision(decision_header)
             return OmniGuardResult(
@@ -100,7 +117,7 @@ class OmniGuardClient:
         """Check if OmniGuard gateway is healthy."""
         try:
             client = await self._get_client()
-            resp = await client.get("/healthz")
+            resp = await client.get(f"{self.base_url.removesuffix('/v1')}/healthz")
             return resp.status_code == 200 and resp.json().get("status") == "healthy"
         except Exception:
             return False
