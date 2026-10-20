@@ -36,7 +36,7 @@ class Halt(BaseModel):
 async def _omniguard_inspect(agent: str, tool: str, payload: Any) -> str | None:
     """Inspect tool call via OmniGuard. Returns block reason if blocked, None if allowed."""
     if not OMNIGUARD_AVAILABLE:
-        return None
+        return "OmniGuard integration unavailable"
     try:
         omniguard = get_omniguard_client()
         messages = [
@@ -44,11 +44,10 @@ async def _omniguard_inspect(agent: str, tool: str, payload: Any) -> str | None:
             {"role": "user", "content": f"Agent: {agent}, Tool: {tool}, Payload: {payload}"},
         ]
         result = await omniguard.inspect(messages)
-        if result.decision == OmniGuardDecision.BLOCK:
-            return result.blocked_reason or "OmniGuard policy violation"
+        if result.decision != OmniGuardDecision.ALLOW:
+            return result.blocked_reason or "OmniGuard did not allow execution"
     except Exception:
-        # Fail-open for OmniGuard errors (don't block legitimate calls if OmniGuard is down)
-        pass
+        return "OmniGuard inspection unavailable or invalid"
     return None
 
 def create_app(guard: Guard, api_key: str, admin_key: str, enable_omniguard: bool = True) -> FastAPI:
@@ -65,7 +64,7 @@ def create_app(guard: Guard, api_key: str, admin_key: str, enable_omniguard: boo
     async def execute(call: Call, x_api_key: str | None = Header(default=None)):
         authorize(x_api_key, api_key)
         # OmniGuard inspection
-        if enable_omniguard and OMNIGUARD_AVAILABLE:
+        if enable_omniguard:
             block_reason = await _omniguard_inspect(call.agent, call.tool, call.payload)
             if block_reason:
                 raise HTTPException(status_code=403, detail=f"OmniGuard blocked: {block_reason}")
