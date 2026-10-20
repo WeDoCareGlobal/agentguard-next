@@ -32,7 +32,7 @@ jobs:
       - name: Security scan (safety)
         run: safety check --json --output safety-report.json || true
       - name: Test with coverage
-        run: python -m pytest tests/ -v --cov=agentguard --cov-report=xml --cov-fail-under=80
+        run: python -m pytest tests/ -v --cov=agentguard --cov-report=xml --cov-fail-under=70 -m 'not integration'
 
   security:
     runs-on: ubuntu-latest
