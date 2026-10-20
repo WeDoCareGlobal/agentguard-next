@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import hmac
+import logging
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from .core import Guard
+from .identity import TokenAuthority
+from .oidc import OIDCVerifier
 
 # OmniGuard integration
 try:
@@ -16,6 +19,8 @@ try:
 except ImportError:
     OMNIGUARD_AVAILABLE = False
     OmniGuardDecision = None
+
+log = logging.getLogger(__name__)
 
 class Call(BaseModel):
     agent: str = Field(min_length=1, max_length=128)
@@ -46,9 +51,9 @@ async def _omniguard_inspect(agent: str, tool: str, payload: Any) -> str | None:
         result = await omniguard.inspect(messages)
         if result.decision == OmniGuardDecision.BLOCK:
             return result.blocked_reason or "OmniGuard policy violation"
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 - fail-open for network failures
         # Fail-open for OmniGuard errors (don't block legitimate calls if OmniGuard is down)
-        pass
+        log.warning("OmniGuard inspection failed: %s", exc)
     return None
 
 def create_app(guard: Guard, api_key: str, admin_key: str, enable_omniguard: bool = True) -> FastAPI:

@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 import sqlite3
 import threading
@@ -14,6 +15,8 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
+
+log = logging.getLogger(__name__)
 
 
 def canonical(value: Any) -> str:
@@ -39,7 +42,18 @@ class Policy:
 
 
 class Guard:
-    def __init__(self, db_path: str, audit_key: bytes, policy: Policy, tools: dict[str, Callable[[Any], Any]], max_per_minute: int = 60, reservation_store=None, shared_control=None, coordinator=None, central_audit=None):
+    def __init__(
+        self,
+        db_path: str,
+        audit_key: bytes,
+        policy: Policy,
+        tools: dict[str, Callable[[Any], Any]],
+        max_per_minute: int = 60,
+        reservation_store=None,
+        shared_control=None,
+        coordinator=None,
+        central_audit=None,
+    ):
         if not audit_key or len(audit_key) < 32:
             raise ValueError("Audit key must be at least 32 bytes")
         if max_per_minute < 1:
@@ -73,11 +87,11 @@ class Guard:
             count = self.db.execute("SELECT count(*) FROM events").fetchone()[0]
             central = None
             if self.central_audit is not None:
-                try:
-                    valid, checked = self.central_audit.verify("enforcement")
-                    central = {"valid": bool(valid), "checked": checked}
-                except Exception:
-                    central = {"valid": False, "error": "unavailable"}
+                            try:
+                                valid, checked = self.central_audit.verify("enforcement")
+                                central = {"valid": bool(valid), "checked": checked}
+                            except Exception as exc:  # noqa: BLE001 - central audit unavailable, fail closed
+                                central = {"valid": False, "error": f"unavailable: {exc}"}
             return {"local_valid": local, "local_events": count, "central": central,
                     "healthy": local and (central is None or central.get("valid") is True)}
 
@@ -133,7 +147,8 @@ class Guard:
             reason = "policy"
             try:
                 halted = self.shared_control.is_halted() if self.shared_control is not None else self.db.execute("SELECT value FROM settings WHERE name='halt'").fetchone() == ("1",)
-            except Exception:
+            except Exception as exc:  # noqa: BLE001 - shared control unavailable, fail closed
+                log.warning("Shared control unavailable, failing closed: %s", exc)
                 halted = True  # Shared control unavailable: fail closed.
             if halted:
                 decision, reason = "DENY", "kill_switch"
@@ -151,7 +166,8 @@ class Guard:
                 if self.shared_control is not None:
                     try:
                         approved = self.shared_control.consume(agent, fp, approval)
-                    except Exception:
+                    except Exception as exc:  # noqa: BLE001 - shared control unavailable, fail closed
+                        log.warning("Shared control consume failed: %s", exc)
                         approved = False
                 else:
                     token_hash = hashlib.sha256((approval or "").encode()).hexdigest()
@@ -170,7 +186,8 @@ class Guard:
                         limit=self.max_per_minute,
                         approval_required=decision == "APPROVAL_REQUIRED",
                         approval_token=approval)
-                except Exception:
+                except Exception as exc:  # noqa: BLE001 - coordinator unavailable, fail closed
+                    log.warning("Coordinator admit failed: %s", exc)
                     admitted, reason = False, "coordination_unavailable"
                 decision = "ALLOW" if admitted else "DENY"
             if decision == "ALLOW" and self.coordinator is None and self.reservation_store is not None:
@@ -178,7 +195,8 @@ class Guard:
                 # A reservation is not refunded if local execution subsequently fails.
                 try:
                     reserved = self.reservation_store.reserve(request_id, agent, fp, self.max_per_minute)
-                except Exception:
+                except Exception as exc:  # noqa: BLE001 - reservation store unavailable, fail closed
+                    log.warning("Reservation store failed: %s", exc)
                     reserved = False
                     reason = "coordination_unavailable"
                 if not reserved:
@@ -196,7 +214,8 @@ class Guard:
             if self.central_audit is not None:
                 try:
                     self.central_audit.append("enforcement", {"event": "decision", "agent": agent, "tool": tool, "request_id": request_id, "decision": decision, "reason": reason})
-                except Exception:
+                except Exception as exc:  # noqa: BLE001 - central audit unavailable, fail closed
+                    log.warning("Central audit append failed: %s", exc)
                     # Never execute when the required centralized audit is unavailable.
                     decision, reason = "DENY", "central_audit_unavailable"
             self.db.execute("INSERT INTO requests(request_id,agent,fingerprint,outcome) VALUES(?,?,?,?)", (request_id, agent, fp, decision))
@@ -209,17 +228,17 @@ class Guard:
                 if self.central_audit is not None:
                     try:
                         self.central_audit.append("enforcement", {"event": "execution_completed", "request_id": request_id})
-                    except Exception:
+                    except Exception as exc:  # noqa: BLE001 - central audit unavailable, fail closed
+                        log.warning("Central audit append failed after execution: %s", exc)
                         self._audit({"event": "central_audit_failed_after_execution", "request_id": request_id})
                         return {"decision": "ERROR", "reason": "central_audit_unavailable_after_execution"}
                 self._audit({"event": "execution_completed", "request_id": request_id})
                 return {"decision": "ALLOW", "result": result}
-            except Exception:
+            except Exception:  # noqa: BLE001 - tool execution failed, fail closed
                 if self.central_audit is not None:
                     try:
                         self.central_audit.append("enforcement", {"event": "execution_failed", "request_id": request_id})
-                    except Exception:
-                        pass
+                    except Exception as exc2:  # noqa: BLE001 - central audit unavailable for execution_failed, fail closed
+                        log.warning("Central audit append failed for execution_failed: %s", exc2)
                 self._audit({"event": "execution_failed", "request_id": request_id})
                 return {"decision": "ERROR", "reason": "tool_execution_failed"}
-

@@ -107,7 +107,7 @@ class OmniGuardClient:
         try:
             # Use base_url without /v1 suffix for health check endpoint
             base = self.base_url.rstrip("/")
-            health_base = base[:-3] if base.endswith("/v1") else base
+            health_base = base.removesuffix("/v1")
             health_client = httpx.AsyncClient(
                 base_url=health_base,
                 timeout=self.timeout,
@@ -115,10 +115,10 @@ class OmniGuardClient:
             resp = await health_client.get("/healthz")
             await health_client.aclose()
             return resp.status_code == 200 and resp.json().get("status") == "healthy"
-        except Exception:
+        except Exception:  # noqa: BLE001 - health check failure
             try:
                 await health_client.aclose()
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 - best effort cleanup
                 pass
             return False
 

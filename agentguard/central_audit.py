@@ -55,19 +55,17 @@ class PostgresAudit:
         body = canonical_event(event)
         timestamp = time.time()
         lock_id = int.from_bytes(hashlib.sha256(('audit:'+stream).encode()).digest()[:8], 'big', signed=True)
-        with self.connection_factory() as conn:
-            with conn.transaction():
-                conn.execute('SELECT pg_advisory_xact_lock(%s)', (lock_id,))
-                row = conn.execute('SELECT sequence,mac FROM ag_audit_events WHERE stream=%s ORDER BY sequence DESC LIMIT 1', (stream,)).fetchone()
-                seq, previous = (row[0]+1, row[1]) if row else (1, '0'*64)
-                mac = event_mac(self.key, stream, seq, timestamp, body, previous)
-                conn.execute('INSERT INTO ag_audit_events(stream,sequence,recorded_at,event_json,prev_mac,mac) VALUES (%s,%s,%s,%s,%s,%s)', (stream,seq,timestamp,body,previous,mac))
-                return AuditReceipt(stream, seq, mac)
+        with self.connection_factory() as conn, conn.transaction():
+            conn.execute('SELECT pg_advisory_xact_lock(%s)', (lock_id,))
+            row = conn.execute('SELECT sequence,mac FROM ag_audit_events WHERE stream=%s ORDER BY sequence DESC LIMIT 1', (stream,)).fetchone()
+            seq, previous = (row[0]+1, row[1]) if row else (1, '0'*64)
+            mac = event_mac(self.key, stream, seq, timestamp, body, previous)
+            conn.execute('INSERT INTO ag_audit_events(stream,sequence,recorded_at,event_json,prev_mac,mac) VALUES (%s,%s,%s,%s,%s,%s)', (stream,seq,timestamp,body,previous,mac))
+            return AuditReceipt(stream, seq, mac)
 
     def verify(self, stream: str) -> tuple[bool, int]:
         with self.connection_factory() as conn:
-            with conn.transaction():
-                rows = conn.execute('SELECT sequence,recorded_at,event_json,prev_mac,mac FROM ag_audit_events WHERE stream=%s ORDER BY sequence', (stream,)).fetchall()
+            rows = conn.execute('SELECT sequence,recorded_at,event_json,prev_mac,mac FROM ag_audit_events WHERE stream=%s ORDER BY sequence', (stream,)).fetchall()
         previous = '0'*64
         for expected, (seq, timestamp, body, prev, mac) in enumerate(rows, 1):
             if seq != expected or not hmac.compare_digest(prev, previous):
