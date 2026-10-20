@@ -18,7 +18,7 @@ try:
     OMNIGUARD_AVAILABLE = True
 except ImportError:
     OMNIGUARD_AVAILABLE = False
-    OmniGuardDecision = None
+    OmniGuardDecision: Any = None  # type: ignore[no-redef]
 
 log = logging.getLogger(__name__)
 

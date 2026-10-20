@@ -14,7 +14,10 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .shared_control import SharedControl
 
 log = logging.getLogger(__name__)
 
@@ -50,7 +53,7 @@ class Guard:
         tools: dict[str, Callable[[Any], Any]],
         max_per_minute: int = 60,
         reservation_store=None,
-        shared_control=None,
+        shared_control: SharedControl | None = None,
         coordinator=None,
         central_audit=None,
     ):
@@ -121,7 +124,7 @@ class Guard:
             if not self.verify_audit():
                 raise RuntimeError("audit_integrity_failure")
         if self.shared_control is not None:
-            return self.shared_control.grant(agent, fingerprint(agent, tool, payload), ttl)
+            return str(self.shared_control.grant(agent, fingerprint(agent, tool, payload), ttl))
         token = secrets.token_urlsafe(32)
         with self.lock:
             self.db.execute("INSERT INTO approvals(token_hash,agent,fingerprint,expires) VALUES(?,?,?,?)", (hashlib.sha256(token.encode()).hexdigest(), agent, fingerprint(agent, tool, payload), time.time() + ttl))
