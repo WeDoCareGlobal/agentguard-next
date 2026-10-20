@@ -1,3 +1,4 @@
+import asyncio
 """Regression tests for OmniGuard's fail-closed AgentGuard boundary."""
 import pytest
 from unittest.mock import AsyncMock, Mock
@@ -5,24 +6,21 @@ from agentguard import api
 from agentguard.omniguard_client import OmniGuardDecision, OmniGuardResult
 
 
-@pytest.mark.asyncio
-async def test_inspection_failure_blocks(monkeypatch):
+def test_inspection_failure_blocks(monkeypatch):
     client = Mock()
     client.inspect = AsyncMock(side_effect=ConnectionError("offline"))
     monkeypatch.setattr(api, "OMNIGUARD_AVAILABLE", True)
     monkeypatch.setattr(api, "get_omniguard_client", lambda: client)
-    reason = await api._omniguard_inspect("agent", "tool", {"text": "hello"})
+    reason = asyncio.run(api._omniguard_inspect("agent", "tool", {"text": "hello"}))
     assert reason is not None
 
 
-@pytest.mark.asyncio
-async def test_missing_integration_blocks(monkeypatch):
+def test_missing_integration_blocks(monkeypatch):
     monkeypatch.setattr(api, "OMNIGUARD_AVAILABLE", False)
-    assert await api._omniguard_inspect("agent", "tool", {}) is not None
+    assert asyncio.run(api._omniguard_inspect("agent", "tool", {})) is not None
 
 
-@pytest.mark.asyncio
-async def test_explicit_allow_passes(monkeypatch):
+def test_explicit_allow_passes(monkeypatch):
     client = Mock()
     client.inspect = AsyncMock(return_value=OmniGuardResult(
         decision=OmniGuardDecision.ALLOW,
@@ -33,11 +31,10 @@ async def test_explicit_allow_passes(monkeypatch):
     ))
     monkeypatch.setattr(api, "OMNIGUARD_AVAILABLE", True)
     monkeypatch.setattr(api, "get_omniguard_client", lambda: client)
-    assert await api._omniguard_inspect("agent", "tool", {}) is None
+    assert asyncio.run(api._omniguard_inspect("agent", "tool", {})) is None
 
 
-@pytest.mark.asyncio
-async def test_explicit_block_rejects(monkeypatch):
+def test_explicit_block_rejects(monkeypatch):
     client = Mock()
     client.inspect = AsyncMock(return_value=OmniGuardResult(
         decision=OmniGuardDecision.BLOCK,
@@ -49,4 +46,4 @@ async def test_explicit_block_rejects(monkeypatch):
     ))
     monkeypatch.setattr(api, "OMNIGUARD_AVAILABLE", True)
     monkeypatch.setattr(api, "get_omniguard_client", lambda: client)
-    assert await api._omniguard_inspect("agent", "tool", {}) == "policy"
+    assert asyncio.run(api._omniguard_inspect("agent", "tool", {})) == "policy"
