@@ -50,7 +50,7 @@ def test_scoped_endpoint(tmp_path):
     g = Guard(str(tmp_path/'scoped.db'), b'k'*32, Policy(frozenset({'read'})), {'read': lambda x: 'ok'})
     app = create_app(g, 'a'*32, 'b'*32)
     authority = TokenAuthority(b'x'*32)
-    attach_scoped_execution(app, g, authority)
+    attach_scoped_execution(app, g, authority, enable_omniguard=False)
     c = TestClient(app)
     payload = {'agent':'a', 'tool':'read', 'request_id':'r1', 'payload':{}}
     assert c.post('/v1/scoped/execute', json=payload).status_code == 401
