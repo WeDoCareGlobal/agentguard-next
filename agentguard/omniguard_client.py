@@ -105,21 +105,16 @@ class OmniGuardClient:
     async def health_check(self) -> bool:
         """Check if OmniGuard gateway is healthy."""
         try:
-            # Use base_url without /v1 suffix for health check endpoint
+            # Use base_url without /v1 suffix for health check endpoint.
             base = self.base_url.rstrip("/")
             health_base = base.removesuffix("/v1")
-            health_client = httpx.AsyncClient(
-                base_url=health_base,
-                timeout=self.timeout,
-            )
-            resp = await health_client.get("/healthz")
-            await health_client.aclose()
-            return resp.status_code == 200 and resp.json().get("status") == "healthy"
-        except Exception:  # noqa: BLE001 - health check failure
+            client = httpx.AsyncClient(base_url=health_base, timeout=self.timeout)
             try:
-                await health_client.aclose()
-            except Exception:  # noqa: BLE001, S110 - best effort cleanup
-                pass
+                resp = await client.get("/healthz")
+                return resp.status_code == 200 and resp.json().get("status") == "healthy"
+            finally:
+                await client.aclose()
+        except Exception:  # noqa: BLE001 - health check failure is unhealthy
             return False
 
 
