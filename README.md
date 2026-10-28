@@ -1,5 +1,11 @@
 # AgentGuard — Security & Governance Control Plane for Autonomous AI Agents
 
+> **Engineering focus:** Policy-aware agent execution and auditable controls.
+>
+> **Evidence boundary:** Validate security configuration and test evidence before deployment.
+>
+> [Project overview](https://www.wedocare-global.com/agentguard.html) · [Evidence index](https://www.wedocare-global.com/evidence.html) · [Portfolio](https://github.com/WeDoCareGlobal)
+
 > **Development status:** This repository is a work in progress. The architecture and examples below are not a certification that every integration is implemented or production-validated. Review the current source, tests and release notes before deployment. Publication DOIs identify their recorded artifacts, not automatically the latest Next commit. See the [portfolio evidence index](https://wedocare-global.com/evidence.html).
 
 
