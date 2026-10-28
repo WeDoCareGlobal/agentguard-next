@@ -28,9 +28,9 @@ jobs:
       - name: Typecheck
         run: mypy agentguard/ --ignore-missing-imports
       - name: Security scan (bandit)
-        run: bandit -r agentguard/ -f json -o bandit-report.json || true
+        run: bandit -r agentguard/ -f json -o bandit-report.json
       - name: Security scan (safety)
-        run: safety check --json --output safety-report.json || true
+        run: safety check --json --output safety-report.json
       - name: Test with coverage
         run: python -m pytest tests/ -v --cov=agentguard --cov-report=xml --cov-fail-under=70 -m 'not integration'
 
