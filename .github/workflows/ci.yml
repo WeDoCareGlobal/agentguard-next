@@ -36,14 +36,16 @@ jobs:
           name: bandit-findings
           path: bandit-report.json
           if-no-files-found: warn
-      - name: Security scan (safety)
-        run: safety check --output json > safety-report.json
-      - name: Upload Safety findings
+      - name: Security scan (pip-audit)
+        run: |
+          python -m pip install pip-audit
+          python -m pip_audit --format json --output pip-audit-report.json
+      - name: Upload dependency vulnerability findings
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: safety-findings
-          path: safety-report.json
+          name: pip-audit-findings
+          path: pip-audit-report.json
           if-no-files-found: warn
       - name: Test with coverage
         run: python -m pytest tests/ -v --cov=agentguard --cov-report=xml --cov-fail-under=70 -m 'not integration'
