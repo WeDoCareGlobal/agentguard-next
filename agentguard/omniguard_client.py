@@ -61,6 +61,8 @@ class OmniGuardClient:
         metadata: dict[str, Any] | None = None,
     ) -> OmniGuardResult:
         """Send messages to OmniGuard for inspection."""
+        if not self.api_key:
+            raise RuntimeError("OMNIGUARD_API_KEY must be configured")
         client = await self._get_client()
         payload = {
             "model": model,
