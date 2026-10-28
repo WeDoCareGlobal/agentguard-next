@@ -20,7 +20,7 @@ classifiers = [
 dependencies = [
     "fastapi>=0.110,<1",
     "uvicorn>=0.27,<1",
-    "cryptography>=42,<47",
+    "cryptography>=50,<51",
     "httpx>=0.27,<1",
     "pydantic>=2.7,<3",
     "pyyaml>=6.0,<7",
@@ -29,7 +29,7 @@ dependencies = [
 [project.optional-dependencies]
 postgres = ["psycopg[binary]>=3.2,<4"]
 test = ["pytest>=8", "httpx>=0.27"]
-dev = ["ruff", "mypy", "bandit", "safety"]
+dev = ["ruff", "mypy", "bandit"]
 [project.scripts]
 agentguard = "agentguard.cli:app"
 [tool.setuptools.packages.find]
