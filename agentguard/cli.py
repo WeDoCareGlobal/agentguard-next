@@ -16,7 +16,7 @@ app = typer.Typer(add_completion=False, help="agentguard CLI")
 cli = app
 
 _DEFAULT_POLICY_PATH = "policy.yaml"
-_DEFAULT_RUN_HOST = "0.0.0.0"
+_DEFAULT_RUN_HOST = "0.0.0.0"  # nosec B104 - explicitly exposed server default, configurable via --host
 _DEFAULT_RUN_PORT = 8000
 _DEFAULT_RUN_POLICY = "policy.yaml"
 
