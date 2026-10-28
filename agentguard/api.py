@@ -16,11 +16,11 @@ from .oidc import OIDCVerifier
 try:
     from .omniguard_client import OmniGuardDecision, get_omniguard_client
     OMNIGUARD_AVAILABLE = True
-except ImportError:  # pragma: no cover
+except ImportError:
     OMNIGUARD_AVAILABLE = False
-    OmniGuardDecision = None  # type: ignore
+    OmniGuardDecision: Any = None  # type: ignore[no-redef]
 
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 class Call(BaseModel):
     agent: str = Field(min_length=1, max_length=128)
@@ -41,7 +41,7 @@ class Halt(BaseModel):
 async def _omniguard_inspect(agent: str, tool: str, payload: Any) -> str | None:
     """Inspect tool call via OmniGuard. Returns block reason if blocked, None if allowed."""
     if not OMNIGUARD_AVAILABLE:
-        return None  # pragma: no cover - OmniGuard unavailable
+        return None
     try:
         omniguard = get_omniguard_client()
         messages = [
@@ -51,13 +51,14 @@ async def _omniguard_inspect(agent: str, tool: str, payload: Any) -> str | None:
         result = await omniguard.inspect(messages)
         if result.decision == OmniGuardDecision.BLOCK:
             return result.blocked_reason or "OmniGuard policy violation"
-    except Exception:  # pragma: no cover - intentional fail-open
-        logger.exception("OmniGuard inspection failed")  # nosec: BLE001/S110 - intentional fail-open, never block legitimate calls
+    except Exception as exc:  # noqa: BLE001 - fail-open for network failures
+        # Fail-open for OmniGuard errors (don't block legitimate calls if OmniGuard is down)
+        log.warning("OmniGuard inspection failed: %s", exc)
     return None
 
 def create_app(guard: Guard, api_key: str, admin_key: str, enable_omniguard: bool = True) -> FastAPI:
     if len(api_key) < 32 or len(admin_key) < 32 or hmac.compare_digest(api_key, admin_key):
-        raise ValueError("Distinct, strong API and admin keys required")  # pragma: no cover
+        raise ValueError("Distinct, strong API and admin keys required")
     app = FastAPI(title="AgentGuard Clean-Room", version="0.1.0")
     def authorize(provided: str | None, expected: str) -> None:
         if not provided or not hmac.compare_digest(provided, expected):
@@ -72,12 +73,12 @@ def create_app(guard: Guard, api_key: str, admin_key: str, enable_omniguard: boo
         if enable_omniguard and OMNIGUARD_AVAILABLE:
             block_reason = await _omniguard_inspect(call.agent, call.tool, call.payload)
             if block_reason:
-                raise HTTPException(status_code=403, detail=f"OmniGuard blocked: {block_reason}")  # pragma: no cover
+                raise HTTPException(status_code=403, detail=f"OmniGuard blocked: {block_reason}")
         return guard.execute(call.agent, call.tool, call.payload, call.request_id, call.approval)
     @app.post("/v1/admin/approvals")
     def grant(req: Approval, x_admin_key: str | None = Header(default=None)):
         authorize(x_admin_key, admin_key)
-        try:  # pragma: no cover - ValueError path hard to trigger in tests
+        try:
             return {"token": guard.grant(req.agent, req.tool, req.payload, req.ttl)}
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid approval request")
@@ -89,7 +90,7 @@ def create_app(guard: Guard, api_key: str, admin_key: str, enable_omniguard: boo
     @app.get("/v1/admin/audit/verify")
     def verify(x_admin_key: str | None = Header(default=None)):
         authorize(x_admin_key, admin_key)
-        return {"valid": guard.verify_audit()}  # pragma: no cover - verification path
+        return {"valid": guard.verify_audit()}
     return app
 
 

@@ -1,7 +1,6 @@
 """OmniGuard client for FoundationCentar-Next integration."""
 from __future__ import annotations
 
-import logging
 import os
 import threading
 from dataclasses import dataclass
@@ -9,8 +8,6 @@ from enum import Enum
 from typing import Any
 
 import httpx
-
-logger = logging.getLogger(__name__)
 
 
 class OmniGuardDecision(str, Enum):
@@ -52,12 +49,12 @@ class OmniGuardClient:
             )
         return self._client
 
-    async def close(self) -> None:  # pragma: no cover
+    async def close(self) -> None:
         if self._client:
             await self._client.aclose()
             self._client = None
 
-    async def inspect(  # pragma: no cover
+    async def inspect(
         self,
         messages: list[dict[str, Any]],
         model: str = "omniguard-2.0",
@@ -74,6 +71,12 @@ class OmniGuardClient:
             resp = await client.post("/chat/completions", json=payload)
             decision_header = resp.headers.get("X-Governance-Decision", "BLOCK")
             decision = OmniGuardDecision(decision_header)
+            response_data = resp.json()
+            blocked_reason = (
+                response_data.get("block_reason")
+                or response_data.get("error")
+                or response_data.get("detail")
+            ) if decision == OmniGuardDecision.BLOCK else None
             return OmniGuardResult(
                 decision=decision,
                 confidence=float(resp.headers.get("X-Governance-Confidence", "0.0")),
@@ -85,7 +88,7 @@ class OmniGuardClient:
                     "tier2": float(resp.headers.get("X-Tier2-Latency-Ms", "0.0")),
                     "tier3": float(resp.headers.get("X-Tier3-Latency-Ms", "0.0")),
                 },
-                blocked_reason=resp.json().get("detail") if decision == OmniGuardDecision.BLOCK else None,
+                blocked_reason=blocked_reason,
             )
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 403:
@@ -99,14 +102,24 @@ class OmniGuardClient:
                 )
             raise
 
-    async def health_check(self) -> bool:  # pragma: no cover
+    async def health_check(self) -> bool:
         """Check if OmniGuard gateway is healthy."""
         try:
-            client = await self._get_client()
-            resp = await client.get("/healthz")
+            # Use base_url without /v1 suffix for health check endpoint
+            base = self.base_url.rstrip("/")
+            health_base = base.removesuffix("/v1")
+            health_client = httpx.AsyncClient(
+                base_url=health_base,
+                timeout=self.timeout,
+            )
+            resp = await health_client.get("/healthz")
+            await health_client.aclose()
             return resp.status_code == 200 and resp.json().get("status") == "healthy"
-        except Exception:
-            logger.exception("OmniGuard health check failed")
+        except Exception:  # noqa: BLE001 - health check failure
+            try:
+                await health_client.aclose()
+            except Exception:  # noqa: BLE001, S110 - best effort cleanup
+                pass
             return False
 
 
@@ -125,7 +138,7 @@ def get_omniguard_client() -> OmniGuardClient:
     return _omniguard_client
 
 
-async def close_omniguard_client() -> None:  # pragma: no cover
+async def close_omniguard_client() -> None:
     global _omniguard_client
     if _omniguard_client:
         await _omniguard_client.close()
