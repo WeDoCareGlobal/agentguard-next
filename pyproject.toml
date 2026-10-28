@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 [project]
 name = "agentguard"
-version = "1.0.0rc1"
+version = "1.0.0-pre.1"
 description = "Security & Governance Control Plane for Autonomous AI Agents"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -42,3 +42,8 @@ python_version = "3.11"
 warn_return_any = true
 warn_unused_ignores = true
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests as integration tests (require live services)",
+]

@@ -37,7 +37,7 @@ class OIDCVerifier:
         if not isinstance(keys, list) or len(keys) > 100:
             raise ValueError('Invalid JWKS')
         self.issuer, self.audience, self.leeway = issuer, audience, leeway
-        self.keys = {}
+        self.keys: dict[str, Any] = {}
         for key in keys:
             if not isinstance(key, dict) or key.get('kty') != 'RSA' or key.get('alg', 'RS256') != 'RS256' or key.get('use', 'sig') != 'sig':
                 continue
@@ -59,7 +59,8 @@ class OIDCVerifier:
             header = json.loads(_decode(a))
             if not isinstance(header, dict) or header.get('alg') != 'RS256' or header.get('typ', 'JWT') not in ('JWT', 'at+jwt'):
                 return None
-            key = self.keys.get(header.get('kid'))
+            kid = header.get('kid')
+            key = self.keys.get(kid) if isinstance(kid, str) else None
             if key is None:
                 return None
             key.verify(_decode(c), (a + '.' + b).encode('ascii'), padding.PKCS1v15(), hashes.SHA256())
