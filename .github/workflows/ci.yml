@@ -29,6 +29,13 @@ jobs:
         run: mypy agentguard/ --ignore-missing-imports
       - name: Security scan (bandit)
         run: bandit -r agentguard/ -f json -o bandit-report.json
+      - name: Upload Bandit findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-findings
+          path: bandit-report.json
+          if-no-files-found: warn
       - name: Security scan (safety)
         run: safety check --json --output safety-report.json
       - name: Test with coverage
