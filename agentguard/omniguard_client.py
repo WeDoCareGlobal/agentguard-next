@@ -104,15 +104,18 @@ class OmniGuardClient:
 
     async def health_check(self) -> bool:
         """Check if OmniGuard gateway is healthy."""
+        health_client = None
         try:
-            # Ensure the connection is closed even on HTTP or JSON errors.
             base = self.base_url.rstrip("/")
             health_base = base.removesuffix("/v1")
-            async with httpx.AsyncClient(base_url=health_base, timeout=self.timeout) as client:
-                resp = await client.get("/healthz")
-                return resp.status_code == 200 and resp.json().get("status") == "healthy"
+            health_client = httpx.AsyncClient(base_url=health_base, timeout=self.timeout)
+            resp = await health_client.get("/healthz")
+            return resp.status_code == 200 and resp.json().get("status") == "healthy"
         except (httpx.HTTPError, ValueError):
             return False
+        finally:
+            if health_client is not None:
+                await health_client.aclose()
 
 
 # Singleton instance
