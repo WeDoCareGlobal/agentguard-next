@@ -37,7 +37,7 @@ jobs:
           path: bandit-report.json
           if-no-files-found: warn
       - name: Security scan (safety)
-        run: safety check --json --output safety-report.json
+        run: safety check --output json > safety-report.json
       - name: Test with coverage
         run: python -m pytest tests/ -v --cov=agentguard --cov-report=xml --cov-fail-under=70 -m 'not integration'
 
