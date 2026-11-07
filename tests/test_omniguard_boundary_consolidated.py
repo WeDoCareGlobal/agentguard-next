@@ -24,7 +24,7 @@ def test_inspection_rejects_gateway_exception(monkeypatch):
             raise TimeoutError("gateway unavailable")
     monkeypatch.setattr(api, "OMNIGUARD_AVAILABLE", True)
     monkeypatch.setattr(api, "get_omniguard_client", lambda: Client())
-    assert await api._omniguard_inspect("a", "read", {}) == "OmniGuard inspection unavailable"
+    assert asyncio.run(api._omniguard_inspect("a", "read", {})) == "OmniGuard inspection unavailable"
 
 
 def test_legacy_route_denies_without_inspector(tmp_path, monkeypatch):
