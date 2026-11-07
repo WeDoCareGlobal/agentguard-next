@@ -6,7 +6,7 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - ./policy.yaml:/app/policy.yaml:ro
-      - ./data:/app/data
+      - agentguard-data:/app/data
     environment:
       AGENTGUARD_POLICY: /app/policy.yaml
       AGENTGUARD_DB_PATH: /app/data/audit.db
@@ -16,3 +16,5 @@ services:
       AGENTGUARD_OMNIGUARD: "true"
       OMNIGUARD_API_KEY: ${OMNIGUARD_API_KEY:?Set OMNIGUARD_API_KEY}
       OMNIGUARD_BASE_URL: ${OMNIGUARD_BASE_URL:?Set reachable gateway URL ending in /v1}
+volumes:
+  agentguard-data:
