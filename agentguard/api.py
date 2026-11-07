@@ -41,7 +41,7 @@ class Halt(BaseModel):
 async def _omniguard_inspect(agent: str, tool: str, payload: Any) -> str | None:
     """Inspect tool call via OmniGuard. Returns block reason if blocked, None if allowed."""
     if not OMNIGUARD_AVAILABLE:
-        return None
+        return "OmniGuard inspection unavailable"
     try:
         omniguard = get_omniguard_client()
         messages = [
@@ -51,10 +51,12 @@ async def _omniguard_inspect(agent: str, tool: str, payload: Any) -> str | None:
         result = await omniguard.inspect(messages)
         if result.decision == OmniGuardDecision.BLOCK:
             return result.blocked_reason or "OmniGuard policy violation"
-    except Exception as exc:  # noqa: BLE001 - fail-open for network failures
-        # Fail-open for OmniGuard errors (don't block legitimate calls if OmniGuard is down)
-        log.warning("OmniGuard inspection failed: %s", exc)
-    return None
+        # No request-bound signature verifier is configured yet.
+        # An unverified ALLOW must never authorize an external effect.
+        return "Unverified OmniGuard decision"
+    except Exception:  # noqa: BLE001 - fail closed without logging payloads
+        log.warning("OmniGuard inspection unavailable or invalid")
+        return "OmniGuard inspection unavailable"
 
 def create_app(guard: Guard, api_key: str, admin_key: str, enable_omniguard: bool = True) -> FastAPI:
     if len(api_key) < 32 or len(admin_key) < 32 or hmac.compare_digest(api_key, admin_key):
@@ -70,7 +72,7 @@ def create_app(guard: Guard, api_key: str, admin_key: str, enable_omniguard: boo
     async def execute(call: Call, x_api_key: str | None = Header(default=None)):
         authorize(x_api_key, api_key)
         # OmniGuard inspection
-        if enable_omniguard and OMNIGUARD_AVAILABLE:
+        if enable_omniguard:
             block_reason = await _omniguard_inspect(call.agent, call.tool, call.payload)
             if block_reason:
                 raise HTTPException(status_code=403, detail=f"OmniGuard blocked: {block_reason}")
@@ -104,13 +106,16 @@ def attach_scoped_execution(app: FastAPI, guard: Guard, authority: TokenAuthorit
     """Add a bearer-authenticated endpoint without changing legacy key endpoints."""
 
     @app.post('/v1/scoped/execute')
-    def scoped_execute(call: Call, request: Request):
+    async def scoped_execute(call: Call, request: Request):
         auth = request.headers.get('authorization', '')
         if not auth.startswith('Bearer '):
             raise HTTPException(401, 'Unauthorized')
         principal = authority.verify(auth[7:], 'execute', agent=call.agent)
         if principal is None:
             raise HTTPException(403, 'Forbidden')
+        reason = await _omniguard_inspect(call.agent, call.tool, call.payload)
+        if reason:
+            raise HTTPException(status_code=403, detail="OmniGuard inspection denied")
         return guard.execute(call.agent, call.tool, call.payload, call.request_id, call.approval)
 
 
@@ -121,7 +126,7 @@ def attach_oidc_execution(app: FastAPI, guard: Guard, verifier: OIDCVerifier) ->
     """
 
     @app.post('/v1/oidc/execute')
-    def oidc_execute(call: Call, request: Request):
+    async def oidc_execute(call: Call, request: Request):
         authorization = request.headers.get('authorization', '')
         if not authorization.startswith('Bearer ') or len(authorization) > 16400:
             raise HTTPException(status_code=401, detail='Unauthorized')
@@ -130,4 +135,7 @@ def attach_oidc_execution(app: FastAPI, guard: Guard, verifier: OIDCVerifier) ->
             raise HTTPException(status_code=401, detail='Unauthorized')
         if principal.subject != call.agent:
             raise HTTPException(status_code=403, detail='Agent mismatch')
+        reason = await _omniguard_inspect(call.agent, call.tool, call.payload)
+        if reason:
+            raise HTTPException(status_code=403, detail="OmniGuard inspection denied")
         return guard.execute(call.agent, call.tool, call.payload, call.request_id, call.approval)
