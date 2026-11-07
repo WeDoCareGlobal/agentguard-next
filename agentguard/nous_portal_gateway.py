@@ -18,10 +18,11 @@ from __future__ import annotations
 import hashlib
 import hmac
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
-from .nous_portal import NousPortalRouter, ProviderConfig, RouteDecision
+from .nous_portal import NousPortalRouter, RouteDecision
 
 
 @dataclass(frozen=True)
@@ -65,7 +66,7 @@ class PerToolGateway:
 
     def _derive_tool_key(self, tool: str, provider: str) -> str:
         """Derive a per-tool key from the master key using HMAC."""
-        payload = f"{self.master_key}:{tool}:{provider}".encode("utf-8")
+        payload = f"{self.master_key}:{tool}:{provider}".encode()
         return hmac.new(self.salt, payload, hashlib.sha256).hexdigest()[:32]
 
     def _verify_tool_key(self, tool: str, provider: str, key: str) -> bool:
@@ -91,7 +92,7 @@ class PerToolGateway:
         expires_at = time.monotonic() + ttl_seconds
 
         fingerprint = hashlib.sha256(
-            f"{tool}:{provider_config}:{scoped_key}:{expires_at}".encode("utf-8")
+            f"{tool}:{provider_config}:{scoped_key}:{expires_at}".encode()
         ).hexdigest()[:16]
 
         cred = ToolCredential(
@@ -113,7 +114,7 @@ class PerToolGateway:
             return False
         # Key fingerprint is deterministic; verify it matches
         expected_fp = hashlib.sha256(
-            f"{cred.tool}:{cred.provider}:{cred.scoped_key}:{cred.expires_at}".encode("utf-8")
+            f"{cred.tool}:{cred.provider}:{cred.scoped_key}:{cred.expires_at}".encode()
         ).hexdigest()[:16]
         return hmac.compare_digest(expected_fp, cred.fingerprint)
 
@@ -127,7 +128,7 @@ class PerToolGateway:
         payload: dict[str, Any],
         user: str,
         tool_credential: ToolCredential,
-        audit_event: Callable[[dict[str, Any]], None] = None,
+        audit_event: Callable[[dict[str, Any]], None] | None = None,
     ) -> RouteDecision:
         """Route a tool call with per-tool credential validation.
 

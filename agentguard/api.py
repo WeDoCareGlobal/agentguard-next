@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hmac
+import logging
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -17,7 +18,9 @@ try:
     OMNIGUARD_AVAILABLE = True
 except ImportError:
     OMNIGUARD_AVAILABLE = False
-    OmniGuardDecision = None
+    OmniGuardDecision: Any = None  # type: ignore[no-redef]
+
+log = logging.getLogger(__name__)
 
 class Call(BaseModel):
     agent: str = Field(min_length=1, max_length=128)
@@ -38,7 +41,7 @@ class Halt(BaseModel):
 async def _omniguard_inspect(agent: str, tool: str, payload: Any) -> str | None:
     """Inspect tool call via OmniGuard. Returns block reason if blocked, None if allowed."""
     if not OMNIGUARD_AVAILABLE:
-        return "OmniGuard integration unavailable"
+        return "OmniGuard inspection unavailable"
     try:
         omniguard = get_omniguard_client()
         messages = [
@@ -46,11 +49,14 @@ async def _omniguard_inspect(agent: str, tool: str, payload: Any) -> str | None:
             {"role": "user", "content": f"Agent: {agent}, Tool: {tool}, Payload: {payload}"},
         ]
         result = await omniguard.inspect(messages)
-        if result.decision != OmniGuardDecision.ALLOW:
-            return result.blocked_reason or "OmniGuard did not allow execution"
-    except Exception:
-        return "OmniGuard inspection unavailable or invalid"
-    return None
+        if result.decision == OmniGuardDecision.BLOCK:
+            return result.blocked_reason or "OmniGuard policy violation"
+        # No request-bound signature verifier is configured yet.
+        # An unverified ALLOW must never authorize an external effect.
+        return "Unverified OmniGuard decision"
+    except Exception:  # noqa: BLE001 - fail closed without logging payloads
+        log.warning("OmniGuard inspection unavailable or invalid")
+        return "OmniGuard inspection unavailable"
 
 def create_app(guard: Guard, api_key: str, admin_key: str, enable_omniguard: bool = True) -> FastAPI:
     if len(api_key) < 32 or len(admin_key) < 32 or hmac.compare_digest(api_key, admin_key):
@@ -110,7 +116,7 @@ def attach_scoped_execution(app: FastAPI, guard: Guard, authority: TokenAuthorit
         if enable_omniguard:
             reason = await _omniguard_inspect(call.agent, call.tool, call.payload)
             if reason:
-                raise HTTPException(status_code=403, detail=f'OmniGuard blocked: {reason}')
+                raise HTTPException(status_code=403, detail="OmniGuard inspection denied")
         return guard.execute(call.agent, call.tool, call.payload, call.request_id, call.approval)
 
 
@@ -133,5 +139,5 @@ def attach_oidc_execution(app: FastAPI, guard: Guard, verifier: OIDCVerifier, en
         if enable_omniguard:
             reason = await _omniguard_inspect(call.agent, call.tool, call.payload)
             if reason:
-                raise HTTPException(status_code=403, detail=f'OmniGuard blocked: {reason}')
+                raise HTTPException(status_code=403, detail="OmniGuard inspection denied")
         return guard.execute(call.agent, call.tool, call.payload, call.request_id, call.approval)

@@ -1,4 +1,4 @@
-"""HTTP contract tests for AgentGuard -> OmniGuard; no live gateway required."""
+"""HTTP transport contract tests for AgentGuard -> OmniGuard; no live gateway required."""
 import asyncio
 
 import httpx
@@ -29,23 +29,35 @@ def _run_with_response(status, headers=None, body=None):
     return asyncio.run(run()), seen
 
 
-def test_explicit_allow_requires_header():
+def test_gateway_path_and_header_parsing_do_not_verify_signature():
     result, seen = _run_with_response(200, {"X-Governance-Decision": "ALLOW"})
     assert result.decision == OmniGuardDecision.ALLOW
+    assert result.signature == ""
     assert seen == [("/v1/chat/completions", "test-only-key")]
 
 
 def test_explicit_block_is_denied():
     result, _ = _run_with_response(403, body={"detail": "policy denied"})
     assert result.decision == OmniGuardDecision.BLOCK
+    assert result.blocked_reason == "policy denied"
 
 
 @pytest.mark.parametrize("status,headers", [
     (200, {}),
     (200, {"X-Governance-Decision": "BLOCK"}),
+    (403, {}),
+])
+def test_implicit_or_explicit_block_is_not_allow(status, headers):
+    result, _ = _run_with_response(status, headers)
+    assert result.decision == OmniGuardDecision.BLOCK
+
+
+@pytest.mark.parametrize("status,headers", [
     (500, {}),
     (401, {}),
+    (403, {"X-Governance-Decision": "ALLOW"}),
+    (200, {"X-Governance-Decision": "INVALID"}),
 ])
-def test_missing_allow_or_gateway_errors_never_pass(status, headers):
-    with pytest.raises((ValueError, httpx.HTTPStatusError)):
+def test_invalid_transport_cannot_authorize(status, headers):
+    with pytest.raises(ValueError):
         _run_with_response(status, headers)

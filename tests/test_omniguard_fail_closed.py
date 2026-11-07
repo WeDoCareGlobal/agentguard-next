@@ -1,7 +1,7 @@
-import asyncio
 """Regression tests for OmniGuard's fail-closed AgentGuard boundary."""
-import pytest
+import asyncio
 from unittest.mock import AsyncMock, Mock
+
 from agentguard import api
 from agentguard.omniguard_client import OmniGuardDecision, OmniGuardResult
 
@@ -11,8 +11,7 @@ def test_inspection_failure_blocks(monkeypatch):
     client.inspect = AsyncMock(side_effect=ConnectionError("offline"))
     monkeypatch.setattr(api, "OMNIGUARD_AVAILABLE", True)
     monkeypatch.setattr(api, "get_omniguard_client", lambda: client)
-    reason = asyncio.run(api._omniguard_inspect("agent", "tool", {"text": "hello"}))
-    assert reason is not None
+    assert asyncio.run(api._omniguard_inspect("agent", "tool", {"text": "hello"})) is not None
 
 
 def test_missing_integration_blocks(monkeypatch):
@@ -20,7 +19,7 @@ def test_missing_integration_blocks(monkeypatch):
     assert asyncio.run(api._omniguard_inspect("agent", "tool", {})) is not None
 
 
-def test_explicit_allow_passes(monkeypatch):
+def test_unverified_allow_is_denied(monkeypatch):
     client = Mock()
     client.inspect = AsyncMock(return_value=OmniGuardResult(
         decision=OmniGuardDecision.ALLOW,
@@ -31,7 +30,7 @@ def test_explicit_allow_passes(monkeypatch):
     ))
     monkeypatch.setattr(api, "OMNIGUARD_AVAILABLE", True)
     monkeypatch.setattr(api, "get_omniguard_client", lambda: client)
-    assert asyncio.run(api._omniguard_inspect("agent", "tool", {})) is None
+    assert asyncio.run(api._omniguard_inspect("agent", "tool", {})) == "Unverified OmniGuard decision"
 
 
 def test_explicit_block_rejects(monkeypatch):

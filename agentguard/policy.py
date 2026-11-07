@@ -6,20 +6,23 @@ multi-replica / multi-pod deployments enforce a single shared limit.
 
 from __future__ import annotations
 
-import os
+import logging
 import time
 from collections import deque
 from pathlib import Path
-from typing import Any
 
 import yaml
 
 from .central_audit import PostgresAudit
 from .models import Policy
 
+log = logging.getLogger(__name__)
+
+
 class PolicyError(RuntimeError):
     """Raised when a policy file cannot be loaded. Subclasses RuntimeError so
     existing callers that catch RuntimeError keep working."""
+
 
 # Per-process sliding window of call timestamps, keyed by agent.
 # AgentGuard is a sidecar: one process serves one policy, so an in-memory
@@ -41,19 +44,18 @@ def _postgres_rate_limit(agent: str, limit: int, now: float) -> bool:
         return True  # fallback in dev/no-postgres
     # Use ag_rate_limits table if available, otherwise fall back to audit.
     try:
-        with _POSTGRES.connection_factory() as conn:
-            with conn.transaction():
-                conn.execute(
-                    "SELECT count(*) FROM ag_audit_events WHERE stream='rate_limit' "
-                    "AND recorded_at > %s", (now - 60.0,)
-                )
-                count = conn.fetchone()[0]
-                if count >= limit:
-                    return False
-                _POSTGRES.append("rate_limit", {"agent": agent, "now": now})
-                return True
-    except Exception:
-        return True  # never hard-fail an agent; fallback to in-memory window
+        with _POSTGRES.connection_factory() as conn, conn.transaction():
+            conn.execute(
+                "SELECT count(*) FROM ag_audit_events WHERE stream='rate_limit' "
+                "AND recorded_at > %s", (now - 60.0,)
+            )
+            count = conn.fetchone()[0]
+            if count >= limit:
+                return False
+            _POSTGRES.append("rate_limit", {"agent": agent, "now": now})
+            return True
+    except Exception:  # noqa: BLE001 - never hard-fail an agent; fallback to in-memory window
+        return True
 
 
 def load_policy(path: str | Path) -> Policy:
@@ -80,9 +82,7 @@ def load_policy(path: str | Path) -> Policy:
 def is_allowed(policy: Policy, tool: str) -> bool:
     if tool in policy.denied_tools:
         return False
-    if policy.allowed_tools and tool not in policy.allowed_tools:
-        return False
-    return True
+    return not (policy.allowed_tools and tool not in policy.allowed_tools)
 
 
 def check_rate_limit(policy: Policy, agent: str, now: float | None = None) -> bool:
@@ -117,5 +117,5 @@ def reset_rate_limits() -> None:
         try:
             with _POSTGRES.connection_factory() as conn:
                 conn.execute("DELETE FROM ag_audit_events WHERE stream='rate_limit'")
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 - best effort cleanup
+            log.warning("Failed to reset postgres rate limits: %s", exc)

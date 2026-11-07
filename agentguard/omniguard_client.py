@@ -30,11 +30,11 @@ class OmniGuardClient:
 
     def __init__(
         self,
-        base_url: str = "http://localhost:8000/v1",
+        base_url: str | None = None,
         api_key: str | None = None,
         timeout: float = 30.0,
     ):
-        self.base_url = base_url.rstrip("/")
+        self.base_url = (base_url or os.environ.get("OMNIGUARD_BASE_URL") or "http://localhost:8000/v1").rstrip("/")
         # Read API key from env; never embed default secrets in code.
         self.api_key = api_key or os.environ.get("OMNIGUARD_API_KEY")
         self.timeout = timeout
@@ -61,8 +61,6 @@ class OmniGuardClient:
         metadata: dict[str, Any] | None = None,
     ) -> OmniGuardResult:
         """Send messages to OmniGuard for inspection."""
-        if not self.api_key:
-            raise RuntimeError("OMNIGUARD_API_KEY must be configured")
         client = await self._get_client()
         payload = {
             "model": model,
@@ -71,25 +69,20 @@ class OmniGuardClient:
         }
         try:
             resp = await client.post("chat/completions", json=payload)
-            if resp.status_code == 403:
-                try:
-                    error = resp.json()
-                    reason = error.get("block_reason") or error.get("error") or error.get("detail")
-                except (ValueError, AttributeError):
-                    reason = "OmniGuard blocked request"
-                return OmniGuardResult(
-                    decision=OmniGuardDecision.BLOCK,
-                    confidence=1.0,
-                    signature=resp.headers.get("X-Governance-Signature", ""),
-                    latency_ms=0.0,
-                    tier_latencies={},
-                    blocked_reason=str(reason),
-                )
-            resp.raise_for_status()
-            if resp.status_code != 200 or resp.headers.get("X-Governance-Decision") != "ALLOW":
-                raise ValueError("OmniGuard did not explicitly allow execution")
+            if resp.status_code not in (200, 403):
+                raise ValueError("OmniGuard returned unexpected HTTP status")
             decision_header = resp.headers.get("X-Governance-Decision", "BLOCK")
+            if resp.status_code == 200 and decision_header not in ("ALLOW", "BLOCK"):
+                raise ValueError("OmniGuard returned invalid governance decision")
+            if resp.status_code == 403 and decision_header == "ALLOW":
+                raise ValueError("OmniGuard returned contradictory status and decision")
             decision = OmniGuardDecision(decision_header)
+            response_data = resp.json()
+            blocked_reason = (
+                response_data.get("block_reason")
+                or response_data.get("error")
+                or response_data.get("detail")
+            ) if decision == OmniGuardDecision.BLOCK else None
             return OmniGuardResult(
                 decision=decision,
                 confidence=float(resp.headers.get("X-Governance-Confidence", "0.0")),
@@ -101,7 +94,7 @@ class OmniGuardClient:
                     "tier2": float(resp.headers.get("X-Tier2-Latency-Ms", "0.0")),
                     "tier3": float(resp.headers.get("X-Tier3-Latency-Ms", "0.0")),
                 },
-                blocked_reason=resp.json().get("detail") if decision == OmniGuardDecision.BLOCK else None,
+                blocked_reason=blocked_reason,
             )
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 403:
@@ -117,12 +110,18 @@ class OmniGuardClient:
 
     async def health_check(self) -> bool:
         """Check if OmniGuard gateway is healthy."""
+        health_client = None
         try:
-            client = await self._get_client()
-            resp = await client.get(f"{self.base_url.removesuffix('/v1')}/healthz")
+            base = self.base_url.rstrip("/")
+            health_base = base.removesuffix("/v1")
+            health_client = httpx.AsyncClient(base_url=health_base, timeout=self.timeout)
+            resp = await health_client.get("/healthz")
             return resp.status_code == 200 and resp.json().get("status") == "healthy"
-        except Exception:
+        except (httpx.HTTPError, ValueError):
             return False
+        finally:
+            if health_client is not None:
+                await health_client.aclose()
 
 
 # Singleton instance

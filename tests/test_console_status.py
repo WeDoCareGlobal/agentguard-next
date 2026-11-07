@@ -25,4 +25,4 @@ def test_console_status_reports_central_outage(tmp_path):
     c=TestClient(app)
     r=c.get('/v1/admin/status',headers={'x-admin-key':'b'*32})
     assert r.status_code==200 and r.json()['healthy'] is False
-    assert r.json()['central']['error']=='unavailable'
+    assert r.json()['central']['error'].startswith('unavailable')

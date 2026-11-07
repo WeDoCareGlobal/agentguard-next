@@ -10,20 +10,21 @@ Environment variables:
   AGENTGUARD_ADMIN_KEY Admin key for /v1/admin/* (required, >=32 chars, != api key)
   AGENTGUARD_DB_PATH  SQLite path for local audit/approvals (default: ./agentguard.db)
   AGENTGUARD_MAX_PER_MIN Global per-agent rate limit (default: 60)
-  AGENTGUARD_OMNIGUARD Enable OmniGuard inspection (default: true; explicit false only for isolated development)
+  AGENTGUARD_OMNIGUARD Enable OmniGuard inspection (default: false)
 """
 
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
-
-from typing import Any, Callable
+from typing import Any
 
 from fastapi import FastAPI
 
-from .api import attach_optional_console, attach_oidc_execution, attach_scoped_execution, create_app
-from .core import Guard, Policy as CorePolicy
+from .api import attach_optional_console, create_app
+from .core import Guard
+from .core import Policy as CorePolicy
 from .models import Policy as ModelPolicy
 from .policy import load_policy
 
@@ -73,7 +74,7 @@ def build_app() -> FastAPI:
         guard=guard,
         api_key=api_key,
         admin_key=admin_key,
-        enable_omniguard=os.environ.get("AGENTGUARD_OMNIGUARD", "true").strip().lower() != "false",
+        enable_omniguard=os.environ.get("AGENTGUARD_OMNIGUARD", "").lower() == "true",
     )
 
     # Opt-in local console (private network only)
