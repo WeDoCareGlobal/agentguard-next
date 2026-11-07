@@ -30,11 +30,11 @@ class OmniGuardClient:
 
     def __init__(
         self,
-        base_url: str = "http://localhost:8000/v1",
+        base_url: str | None = None,
         api_key: str | None = None,
         timeout: float = 30.0,
     ):
-        self.base_url = (os.environ.get("OMNIGUARD_BASE_URL") or base_url).rstrip("/")
+        self.base_url = (base_url or os.environ.get("OMNIGUARD_BASE_URL") or "http://localhost:8000/v1").rstrip("/")
         # Read API key from env; never embed default secrets in code.
         self.api_key = api_key or os.environ.get("OMNIGUARD_API_KEY")
         self.timeout = timeout
