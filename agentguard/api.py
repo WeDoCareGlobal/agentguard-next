@@ -102,7 +102,7 @@ def attach_optional_console(app: FastAPI, guard: Guard, admin_key: str) -> None:
     app.include_router(console_router(guard, admin_key))
 
 
-def attach_scoped_execution(app: FastAPI, guard: Guard, authority: TokenAuthority) -> None:
+def attach_scoped_execution(app: FastAPI, guard: Guard, authority: TokenAuthority, enable_omniguard: bool = True) -> None:
     """Add a bearer-authenticated endpoint without changing legacy key endpoints."""
 
     @app.post('/v1/scoped/execute')
@@ -113,13 +113,14 @@ def attach_scoped_execution(app: FastAPI, guard: Guard, authority: TokenAuthorit
         principal = authority.verify(auth[7:], 'execute', agent=call.agent)
         if principal is None:
             raise HTTPException(403, 'Forbidden')
-        reason = await _omniguard_inspect(call.agent, call.tool, call.payload)
-        if reason:
-            raise HTTPException(status_code=403, detail="OmniGuard inspection denied")
+        if enable_omniguard:
+            reason = await _omniguard_inspect(call.agent, call.tool, call.payload)
+            if reason:
+                raise HTTPException(status_code=403, detail="OmniGuard inspection denied")
         return guard.execute(call.agent, call.tool, call.payload, call.request_id, call.approval)
 
 
-def attach_oidc_execution(app: FastAPI, guard: Guard, verifier: OIDCVerifier) -> None:
+def attach_oidc_execution(app: FastAPI, guard: Guard, verifier: OIDCVerifier, enable_omniguard: bool = True) -> None:
     """Opt-in OIDC-protected execution route; requires verified execute scope.
 
     Subject is bound to agent identity; clients cannot impersonate another agent.
@@ -135,7 +136,8 @@ def attach_oidc_execution(app: FastAPI, guard: Guard, verifier: OIDCVerifier) ->
             raise HTTPException(status_code=401, detail='Unauthorized')
         if principal.subject != call.agent:
             raise HTTPException(status_code=403, detail='Agent mismatch')
-        reason = await _omniguard_inspect(call.agent, call.tool, call.payload)
-        if reason:
-            raise HTTPException(status_code=403, detail="OmniGuard inspection denied")
+        if enable_omniguard:
+            reason = await _omniguard_inspect(call.agent, call.tool, call.payload)
+            if reason:
+                raise HTTPException(status_code=403, detail="OmniGuard inspection denied")
         return guard.execute(call.agent, call.tool, call.payload, call.request_id, call.approval)
