@@ -1,32 +1,17 @@
-version: "3.9"
-
 services:
   api:
     build: .
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./policy.yaml:/app/policy.yaml:ro
       - ./data:/app/data
     environment:
-      - DATABASE_URL=sqlite:///./data/audit.db
-    depends_on:
-      - redis
-      - db
-
-  redis:
-    image: redis:7-alpine
-    ports: ["6379:6379"]
-
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: agentguard
-      POSTGRES_PASSWORD: agentguard
-      POSTGRES_DB: agentguard
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    ports: ["5432:5432"]
-
-volumes:
-  pgdata:
+      AGENTGUARD_POLICY: /app/policy.yaml
+      AGENTGUARD_DB_PATH: /app/data/audit.db
+      AGENTGUARD_API_KEY: ${AGENTGUARD_API_KEY:?Set AGENTGUARD_API_KEY}
+      AGENTGUARD_ADMIN_KEY: ${AGENTGUARD_ADMIN_KEY:?Set AGENTGUARD_ADMIN_KEY}
+      AGENTGUARD_AUDIT_KEY: ${AGENTGUARD_AUDIT_KEY:?Set AGENTGUARD_AUDIT_KEY}
+      AGENTGUARD_OMNIGUARD: "true"
+      OMNIGUARD_API_KEY: ${OMNIGUARD_API_KEY:?Set OMNIGUARD_API_KEY}
+      OMNIGUARD_BASE_URL: ${OMNIGUARD_BASE_URL:?Set reachable gateway URL ending in /v1}
