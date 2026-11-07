@@ -1,7 +1,7 @@
 """Fail-closed regression coverage for the consolidated OmniGuard boundary."""
+import asyncio
 from types import SimpleNamespace
 
-import pytest
 from fastapi.testclient import TestClient
 
 from agentguard import api
@@ -9,18 +9,16 @@ from agentguard.core import Guard, Policy
 from agentguard.identity import TokenAuthority
 
 
-@pytest.mark.asyncio
-async def test_inspection_rejects_unverified_allow(monkeypatch):
+def test_inspection_rejects_unverified_allow(monkeypatch):
     class Client:
         async def inspect(self, messages):
             return SimpleNamespace(decision=api.OmniGuardDecision.ALLOW)
     monkeypatch.setattr(api, "OMNIGUARD_AVAILABLE", True)
     monkeypatch.setattr(api, "get_omniguard_client", lambda: Client())
-    assert await api._omniguard_inspect("a", "read", {}) == "Unverified OmniGuard decision"
+    assert asyncio.run(api._omniguard_inspect("a", "read", {})) == "Unverified OmniGuard decision"
 
 
-@pytest.mark.asyncio
-async def test_inspection_rejects_gateway_exception(monkeypatch):
+def test_inspection_rejects_gateway_exception(monkeypatch):
     class Client:
         async def inspect(self, messages):
             raise TimeoutError("gateway unavailable")
