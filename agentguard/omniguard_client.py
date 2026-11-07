@@ -68,8 +68,17 @@ class OmniGuardClient:
             "metadata": metadata or {},
         }
         try:
-            resp = await client.post("/chat/completions", json=payload)
+            resp = await client.post("chat/completions", json=payload)
+            if resp.status_code not in (200, 403):
+                raise ValueError("OmniGuard returned unexpected HTTP status")
             decision_header = resp.headers.get("X-Governance-Decision", "BLOCK")
+            if resp.status_code == 200 and decision_header != "ALLOW":
+                # A successful transport response without ALLOW is never authorization.
+                # BLOCK is handled as a policy denial below.
+                if decision_header != "BLOCK":
+                    raise ValueError("OmniGuard returned invalid governance decision")
+            if resp.status_code == 403 and decision_header == "ALLOW":
+                raise ValueError("OmniGuard returned contradictory status and decision")
             decision = OmniGuardDecision(decision_header)
             response_data = resp.json()
             blocked_reason = (
