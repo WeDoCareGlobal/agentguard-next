@@ -20,7 +20,7 @@ COPY tests/ ./tests/
 RUN pip install --no-cache-dir --break-system-packages -e . -r requirements.lock
 
 # Change ownership to non-root user
-RUN chown -R appuser:appuser /app
+RUN mkdir -p /app/data && chown -R appuser:appuser /app
 
 # Switch to non-root user
 USER appuser
