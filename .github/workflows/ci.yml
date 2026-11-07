@@ -74,3 +74,36 @@ jobs:
           push: false
           tags: agentguard:test
           load: true
+
+  compose-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start Compose service and verify SQLite volume writes
+        env:
+          AGENTGUARD_API_KEY: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          AGENTGUARD_ADMIN_KEY: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          AGENTGUARD_AUDIT_KEY: "cccccccccccccccccccccccccccccccc"
+          OMNIGUARD_API_KEY: "ci-placeholder-not-a-live-gateway"
+          OMNIGUARD_BASE_URL: "http://127.0.0.1:9999/v1"
+        run: |
+          set -eu
+          docker compose config --quiet
+          docker compose up --build -d
+          trap 'docker compose logs --no-color; docker compose down --volumes' EXIT
+          for i in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:8000/health > /tmp/agentguard-health.json; then
+              break
+            fi
+            sleep 3
+          done
+          python -c 'import json; h=json.load(open("/tmp/agentguard-health.json")); assert h["status"] == "ok" and h["omniguard_enabled"] is True'
+          docker compose exec -T api python -c 'import sqlite3; db=sqlite3.connect("/app/data/audit.db"); db.execute("CREATE TABLE IF NOT EXISTS compose_smoke (value INTEGER)"); db.execute("INSERT INTO compose_smoke VALUES (42)"); db.commit(); db.close()'
+          docker compose restart api
+          for i in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:8000/health >/dev/null; then
+              break
+            fi
+            sleep 3
+          done
+          docker compose exec -T api python -c 'import sqlite3; db=sqlite3.connect("/app/data/audit.db"); assert db.execute("SELECT value FROM compose_smoke").fetchone()[0] == 42; db.close()'
