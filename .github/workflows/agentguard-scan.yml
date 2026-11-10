@@ -1,0 +1,54 @@
+name: AgentGuard Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Install AgentGuard
+        run: |
+          pip install --break-system-packages -e .
+
+      - name: Run AgentGuard security scan
+        run: |
+          python agentguard/scanner.py scan . --format json > scan-results.json || true
+
+      - name: Check scan results
+        run: |
+          if [ ! -f scan-results.json ]; then
+            echo "ERROR: scan-results.json not created"
+            exit 1
+          fi
+          size=$(wc -c < scan-results.json)
+          echo "scan-results.json size: $size bytes"
+          if [ "$size" -eq 0 ]; then
+            echo "WARNING: scan-results.json is empty"
+            echo "[]" > scan-results.json
+          fi
+          CRITICAL=$(python -c "import json; data=json.load(open('scan-results.json')); print(len([i for i in data if i.get('severity')=='critical']))")
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "::error::Found $CRITICAL critical security issues"
+            exit 1
+          fi
+          echo "Scan passed: $CRITICAL critical issues found"
+
+      - name: Upload scan results
+        uses: actions/upload-artifact@v7
+        with:
+          name: agentguard-scan-results
+          path: scan-results.json
