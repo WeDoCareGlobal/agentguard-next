@@ -51,7 +51,6 @@ class PostgresCoordinator:
                     AND agent=%s AND payload_hash=%s AND expires>%s AND consumed=FALSE
                     RETURNING token_hash''', (digest, agent, fingerprint, now)).fetchone()
                 if row is None: return False, 'approval_missing_or_invalid'
-                conn.execute('INSERT INTO ag_admissions(request_id,agent,fingerprint,created_at) VALUES (%s,%s,%s,%s)',(request_id,agent,fingerprint,now))
-                conn.execute('INSERT INTO ag_admission_audit(request_id,agent,decision,recorded_at) VALUES (%s,%s,%s,%s)',(request_id,agent,'ADMITTED',now))
-                return True, 'admitted'
+            conn.execute('INSERT INTO ag_admissions(request_id,agent,fingerprint,created_at) VALUES (%s,%s,%s,%s)',(request_id,agent,fingerprint,now))
+            conn.execute('INSERT INTO ag_admission_audit(request_id,agent,decision,recorded_at) VALUES (%s,%s,%s,%s)',(request_id,agent,'ADMITTED',now))
             return True, 'admitted'

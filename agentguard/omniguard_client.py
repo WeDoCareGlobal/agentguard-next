@@ -1,7 +1,6 @@
 """OmniGuard client for FoundationCentar-Next integration."""
 from __future__ import annotations
 
-import logging
 import os
 import threading
 from dataclasses import dataclass
@@ -9,8 +8,6 @@ from enum import Enum
 from typing import Any
 
 import httpx
-
-logger = logging.getLogger(__name__)
 
 
 class OmniGuardDecision(str, Enum):
@@ -33,11 +30,11 @@ class OmniGuardClient:
 
     def __init__(
         self,
-        base_url: str = "http://localhost:8000/v1",
+        base_url: str | None = None,
         api_key: str | None = None,
         timeout: float = 30.0,
     ):
-        self.base_url = base_url.rstrip("/")
+        self.base_url = (base_url or os.environ.get("OMNIGUARD_BASE_URL") or "http://localhost:8000/v1").rstrip("/")
         # Read API key from env; never embed default secrets in code.
         self.api_key = api_key or os.environ.get("OMNIGUARD_API_KEY")
         self.timeout = timeout
@@ -52,12 +49,12 @@ class OmniGuardClient:
             )
         return self._client
 
-    async def close(self) -> None:  # pragma: no cover
+    async def close(self) -> None:
         if self._client:
             await self._client.aclose()
             self._client = None
 
-    async def inspect(  # pragma: no cover
+    async def inspect(
         self,
         messages: list[dict[str, Any]],
         model: str = "omniguard-2.0",
@@ -71,9 +68,21 @@ class OmniGuardClient:
             "metadata": metadata or {},
         }
         try:
-            resp = await client.post("/chat/completions", json=payload)
+            resp = await client.post("chat/completions", json=payload)
+            if resp.status_code not in (200, 403):
+                raise ValueError("OmniGuard returned unexpected HTTP status")
             decision_header = resp.headers.get("X-Governance-Decision", "BLOCK")
+            if resp.status_code == 200 and decision_header not in ("ALLOW", "BLOCK"):
+                raise ValueError("OmniGuard returned invalid governance decision")
+            if resp.status_code == 403 and decision_header == "ALLOW":
+                raise ValueError("OmniGuard returned contradictory status and decision")
             decision = OmniGuardDecision(decision_header)
+            response_data = resp.json()
+            blocked_reason = (
+                response_data.get("block_reason")
+                or response_data.get("error")
+                or response_data.get("detail")
+            ) if decision == OmniGuardDecision.BLOCK else None
             return OmniGuardResult(
                 decision=decision,
                 confidence=float(resp.headers.get("X-Governance-Confidence", "0.0")),
@@ -85,7 +94,7 @@ class OmniGuardClient:
                     "tier2": float(resp.headers.get("X-Tier2-Latency-Ms", "0.0")),
                     "tier3": float(resp.headers.get("X-Tier3-Latency-Ms", "0.0")),
                 },
-                blocked_reason=resp.json().get("detail") if decision == OmniGuardDecision.BLOCK else None,
+                blocked_reason=blocked_reason,
             )
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 403:
@@ -99,15 +108,20 @@ class OmniGuardClient:
                 )
             raise
 
-    async def health_check(self) -> bool:  # pragma: no cover
+    async def health_check(self) -> bool:
         """Check if OmniGuard gateway is healthy."""
+        health_client = None
         try:
-            client = await self._get_client()
-            resp = await client.get("/healthz")
+            base = self.base_url.rstrip("/")
+            health_base = base.removesuffix("/v1")
+            health_client = httpx.AsyncClient(base_url=health_base, timeout=self.timeout)
+            resp = await health_client.get("/healthz")
             return resp.status_code == 200 and resp.json().get("status") == "healthy"
-        except Exception:
-            logger.exception("OmniGuard health check failed")
+        except (httpx.HTTPError, ValueError):
             return False
+        finally:
+            if health_client is not None:
+                await health_client.aclose()
 
 
 # Singleton instance
@@ -125,7 +139,7 @@ def get_omniguard_client() -> OmniGuardClient:
     return _omniguard_client
 
 
-async def close_omniguard_client() -> None:  # pragma: no cover
+async def close_omniguard_client() -> None:
     global _omniguard_client
     if _omniguard_client:
         await _omniguard_client.close()
