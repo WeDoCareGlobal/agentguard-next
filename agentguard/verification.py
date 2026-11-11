@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -92,7 +93,7 @@ class AnomalyVerifier:
         self.call_window = call_window_seconds
         self.max_calls = max_calls_per_window
         self._agent_calls: dict[str, list[dict[str, Any]]] = {}
-        self._lock = __import__("threading").RLock()
+        self._lock = threading.RLock()
 
     def verify(self, agent: str, tool: str, payload: Any, timestamp: float | None = None) -> LayerResult:
         t0 = time.perf_counter()
