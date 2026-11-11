@@ -18,7 +18,11 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
+    "alembic>=1.13,<2",
     "fastapi>=0.110,<1",
+    "opentelemetry-api>=1.29,<2",
+    "opentelemetry-sdk>=1.29,<2",
+    "opentelemetry-instrumentation-fastapi>=0.49,<1",
     "uvicorn>=0.27,<1",
     "cryptography>=50,<51",
     "httpx>=0.27,<1",
