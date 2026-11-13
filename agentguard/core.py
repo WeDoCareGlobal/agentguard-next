@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import secrets
 import sqlite3
 import threading
@@ -19,7 +20,26 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .shared_control import SharedControl
 
+from .prompt_injection_filter import filter_prompt, FilterDecision
+from .telemetry import setup_telemetry, trace_tool_call, set_span_attribute, add_span_event
+
 log = logging.getLogger(__name__)
+
+# OpenTelemetry tracer (initialized lazily on first execute call)
+_tracer = None
+
+
+def _get_tracer():
+    global _tracer
+    if _tracer is None:
+        from .telemetry import setup_telemetry
+
+        _tracer = setup_telemetry(
+            service_name="agentguard",
+            service_version="1.0.0",
+            console_export=os.getenv("AGENTGUARD_TELEMETRY_CONSOLE", "false").lower() == "true",
+        )
+    return _tracer
 
 
 def canonical(value: Any) -> str:
@@ -139,13 +159,48 @@ class Guard:
         except (TypeError, ValueError):
             return {"decision": "DENY", "reason": "invalid_payload"}
         with self.lock:
-            # Corrupt local evidence must block admission before tokens, reservations,
-            # or tools are consumed. Do not append to a chain known to be corrupt.
+            # Corrupt local evidence must block admission before tokens,
+            # reservations, or tools are consumed. Do not append to a chain known to be corrupt.
             if not self.verify_audit():
                 return {"decision": "DENY", "reason": "audit_integrity_failure"}
             if self.db.execute("SELECT 1 FROM requests WHERE request_id=?", (request_id,)).fetchone():
                 self._audit({"event": "replay_blocked", "request_id": request_id})
                 return {"decision": "DENY", "reason": "replay"}
+
+            # --- Prompt injection filter (Stavka 2) ---
+            # Runs before policy evaluation; fail-closed if engine errors.
+            try:
+                payload_text = json.dumps(payload, sort_keys=True, ensure_ascii=False) if not isinstance(payload, str) else str(payload)
+                injection_decision = filter_prompt(payload_text)
+                if not injection_decision.allowed:
+                    self._audit({
+                        "event": "prompt_injection_blocked",
+                        "agent": agent,
+                        "tool": tool,
+                        "request_id": request_id,
+                        "engine": injection_decision.engine,
+                        "matches": injection_decision.matches,
+                        "severity": injection_decision.severity,
+                        "latency_ms": injection_decision.latency_ms,
+                    })
+                    return {
+                        "decision": "DENY",
+                        "reason": "prompt_injection",
+                        "injection_engine": injection_decision.engine,
+                        "injection_matches": injection_decision.matches,
+                        "injection_severity": injection_decision.severity,
+                    }
+            except Exception as exc:  # noqa: BLE001 - filter error, fail closed
+                log.warning("Prompt injection filter error (%s), failing closed", exc)
+                self._audit({
+                    "event": "prompt_injection_filter_error",
+                    "agent": agent,
+                    "tool": tool,
+                    "request_id": request_id,
+                    "error": str(exc),
+                })
+                return {"decision": "DENY", "reason": "prompt_injection_filter_error"}
+
             decision = self.policy.decide(tool)
             reason = "policy"
             try:
@@ -226,17 +281,26 @@ class Guard:
             if decision != "ALLOW":
                 return {"decision": decision, "reason": reason}
             # Serialize tool invocation in this reference implementation to avoid in-process races.
+            tracer = _get_tracer()
             try:
-                result = self.tools[tool](payload)
-                if self.central_audit is not None:
-                    try:
-                        self.central_audit.append("enforcement", {"event": "execution_completed", "request_id": request_id})
-                    except Exception as exc:  # noqa: BLE001 - central audit unavailable, fail closed
-                        log.warning("Central audit append failed after execution: %s", exc)
-                        self._audit({"event": "central_audit_failed_after_execution", "request_id": request_id})
-                        return {"decision": "ERROR", "reason": "central_audit_unavailable_after_execution"}
-                self._audit({"event": "execution_completed", "request_id": request_id})
-                return {"decision": "ALLOW", "result": result}
+                with trace_tool_call(
+                    tracer,
+                    tool=tool,
+                    agent=agent,
+                    request_id=request_id,
+                ) as span:
+                    result = self.tools[tool](payload)
+                    set_span_attribute(span, "tool.result_available", True)
+                    add_span_event(span, "tool.execution_completed")
+                    if self.central_audit is not None:
+                        try:
+                            self.central_audit.append("enforcement", {"event": "execution_completed", "request_id": request_id})
+                        except Exception as exc:  # noqa: BLE001 - central audit unavailable, fail closed
+                            log.warning("Central audit append failed after execution: %s", exc)
+                            self._audit({"event": "central_audit_failed_after_execution", "request_id": request_id})
+                            return {"decision": "ERROR", "reason": "central_audit_unavailable_after_execution"}
+                    self._audit({"event": "execution_completed", "request_id": request_id})
+                    return {"decision": "ALLOW", "result": result}
             except Exception:  # noqa: BLE001 - tool execution failed, fail closed
                 if self.central_audit is not None:
                     try:
